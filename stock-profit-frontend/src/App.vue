@@ -1,117 +1,192 @@
 <template>
-  <div class="container">
-    <h1>Stock Profit Calculator</h1>
-
-    <form @submit.prevent="getProfit">
-      <div class="field">
-        <label for="start">Start Time:</label>
-        <input
-          id="start"
-          type="datetime-local"
-          v-model="startTime"
-          required
-        />
+  <div class="app-container">
+    <div class="input-row">
+      <div class="input-group">
+        <label>Start</label>
+        <input type="datetime-local" v-model="startTime" :min="minTime" :max="maxTime" />
       </div>
-
-      <div class="field">
-        <label for="end">End Time:</label>
-        <input
-          id="end"
-          type="datetime-local"
-          v-model="endTime"
-          required
-        />
+      <div class="input-group">
+        <label>End</label>
+        <input type="datetime-local" v-model="endTime" :min="minTime" :max="maxTime" />
       </div>
-
-      <div class="field">
-        <label for="funds">Available Funds:</label>
-        <input
-          id="funds"
-          type="number"
-          v-model.number="funds"
-          min="0.01"
-          step="0.01"
-          required
-        />
+      <div class="input-group">
+        <label>Funds</label>
+        <input type="number" v-model.number="funds" placeholder="0.00" />
       </div>
-
-      <button type="submit">Calculate Profit</button>
-    </form>
-
-    <div v-if="error" class="error">{{ error }}</div>
-
-    <div v-if="result" class="result">
-      <h2>Results</h2>
-      <p><strong>Buy Time:</strong> {{ result.buyTime }}</p>
-      <p><strong>Buy Price:</strong> {{ result.buyPrice }}</p>
-      <p><strong>Sell Time:</strong> {{ result.sellTime }}</p>
-      <p><strong>Sell Price:</strong> {{ result.sellPrice }}</p>
-      <p><strong>Shares Bought:</strong> {{ result.numShares.toFixed(4) }}</p>
-      <p><strong>Profit:</strong> {{ result.profit.toFixed(2) }}</p>
     </div>
+
+    <div class="timeframe">
+      Available: {{ formattedMin }} → {{ formattedMax }}
+    </div>
+
+    <button @click="getProfit" class="calc-button">Calculate</button>
+
+    <div v-if="error" class="error-msg">{{ error }}</div>
+
+    <div v-if="result" class="result-row">
+      <div class="result-item"><strong>Buy:</strong> {{ shortTime(result.buyTime) }} @ {{ result.buyPrice }}</div>
+      <div class="result-item"><strong>Sell:</strong> {{ shortTime(result.sellTime) }} @ {{ result.sellPrice }}</div>
+      <div class="result-item"><strong>Shares:</strong> {{ result.numShares.toFixed(4) }}</div>
+      <div class="result-item"><strong>Profit:</strong> {{ result.profit.toFixed(2) }}</div>
+    </div>
+
+    <div ref="chartContainer" class="chart-container"></div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
+import Highcharts from 'highcharts';
 import api from './services/api.js';
+
+// Use local time instead of UTC
+Highcharts.setOptions({
+  time: { useUTC: false }
+});
 
 const startTime = ref('');
 const endTime   = ref('');
 const funds     = ref(0);
+const minTime   = ref('');
+const maxTime   = ref('');
 const result    = ref(null);
+const chartOptions = ref(null);
 const error     = ref('');
+const chartContainer = ref(null);
+let chartInstance = null;
+
+onMounted(async () => {
+  const res = await api.get('/profit/minmax');
+  minTime.value = res.data.min;
+  maxTime.value = res.data.max;
+});
+
+const formattedMin = computed(() => new Date(minTime.value).toLocaleString());
+const formattedMax = computed(() => new Date(maxTime.value).toLocaleString());
+const shortTime    = ts => new Date(ts).toLocaleTimeString();
+
+watch(chartOptions, (options) => {
+  if (!options || !chartContainer.value) return;
+  if (chartInstance) chartInstance.destroy();
+  chartInstance = Highcharts.chart(chartContainer.value, options);
+});
 
 async function getProfit() {
   error.value = '';
   result.value = null;
-
+  chartOptions.value = null;
   try {
-    // Convert the browser's datetime-local (local) into an ISO string
     const payload = {
       startTime: new Date(startTime.value).toISOString(),
       endTime:   new Date(endTime.value).toISOString(),
       funds:     funds.value,
     };
-
     const res = await api.post('/profit', payload);
     result.value = res.data;
+
+    const dataSeries = res.data.chartData.map(p => [Date.parse(p.timestamp), p.price]);
+    chartOptions.value = {
+      chart: {
+        zoomType: 'x',
+        backgroundColor: '#2b2b2b'
+      },
+      title: { text: null },
+      xAxis: {
+        type: 'datetime',
+        labels: { style: { color: '#eee' } },
+        lineColor: '#444',
+        tickColor: '#444'
+      },
+      yAxis: {
+        title: { text: 'Price', style: { color: '#eee' } },
+        labels: { style: { color: '#eee' } },
+        gridLineColor: '#444'
+      },
+      series: [{
+        type: 'line',
+        data: dataSeries,
+        name: 'Price',
+        color: '#1B3C53',
+        marker: { enabled: false }
+      }, {
+        type: 'scatter',
+        data: [
+          [Date.parse(res.data.buyTime), res.data.buyPrice],
+          [Date.parse(res.data.sellTime), res.data.sellPrice]
+        ],
+        marker: { symbol: 'circle', name: 'Buy/Sell', radius: 6, color: '#901E3E' }
+      }],
+      legend: { enabled: false },
+      credits: { enabled: false }
+    };
   } catch (e) {
-    // Show validation or network errors
     error.value = e.response?.data?.message || e.message;
   }
 }
 </script>
 
 <style>
-.container {
-  max-width: 400px;
+.app-container {
+  max-width: 800px;
   margin: 2rem auto;
   font-family: sans-serif;
+  color: #eee;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
-.field {
-  margin-bottom: 1rem;
+.input-row {
+  display: flex;
+  gap: 1rem;
 }
-label {
-  display: block;
+.input-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.input-group label {
   margin-bottom: 0.25rem;
+  font-size: 0.9rem;
 }
-input {
-  width: 100%;
+.input-group input {
   padding: 0.5rem;
-  box-sizing: border-box;
+  font-size: 1rem;
+  background: #3b3b3b;
+  border: 1px solid #555;
+  color: #eee;
 }
-button {
-  padding: 0.5rem 1rem;
+.timeframe {
+  font-size: 0.85rem;
+  color: #aaa;
 }
-.error {
-  color: red;
+.calc-button {
+  padding: 0.75rem;
+  font-size: 1rem;
+  cursor: pointer;
+  margin-top: 0.5rem;
+  background: transparent;
+  border: 2px solid #eee;
+  color: #eee;
+}
+.calc-button:hover {
+  background: #444;
+}
+.error-msg {
+  color: #ff5555;
+  font-size: 0.9rem;
+}
+.result-row {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.95rem;
+  margin-top: 0.5rem;
+}
+.result-item {
+  flex: 1;
+}
+.chart-container {
+  width: 100%;
+  height: 300px;
   margin-top: 1rem;
-}
-.result {
-  background: #f5f5f5;
-  padding: 1rem;
-  margin-top: 1rem;
-  border-radius: 4px;
 }
 </style>

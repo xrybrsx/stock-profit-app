@@ -21,6 +21,14 @@ export class PricesService implements OnModuleInit {
     this.data = JSON.parse(fs.readFileSync(file, 'utf-8'));
   }
 
+  getMinTimestamp(): string {
+    return this.data[0].timestamp;
+  }
+  
+  getMaxTimestamp(): string {
+    return this.data[this.data.length - 1].timestamp;
+  }
+
   // Return all points
   getAll(): PricePoint[] {
     return this.data;
