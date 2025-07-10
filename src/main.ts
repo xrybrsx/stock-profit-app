@@ -5,12 +5,16 @@ import { ValidationPipe } from '@nestjs/common';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  app.enableCors();                       // allow cross-origin calls
-  app.useGlobalPipes(new ValidationPipe({
-    whitelist: true,                     // strip unknown fields
-    transform: true,                     // auto-convert types
-  }));
+  // allow CORS as before
+  app.enableCors({
+    origin: 'http://localhost:5173', // dev; you can widen this in prod
+  });
 
-  await app.listen(3000);
+  // Use the Azure-provided PORT or default to 3000 locally
+  const portString = process.env.PORT || '3000';
+  const port       = parseInt(portString, 10);
+  
+  await app.listen(port);
+  console.log(`Application is listening on port ${port}`);
 }
 bootstrap();
