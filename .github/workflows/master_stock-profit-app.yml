@@ -1,37 +1,44 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-
-name: Build and deploy Node.js app to Azure Web App - stock-profit-app
+# GitHub Actions workflow for deploying to Azure Web App (Linux F1)
+name: Build and deploy Node.js + Vue app to Azure (Linux)
 
 on:
   push:
     branches:
-      - master
+      - master       # adjust if your default branch is 'master'
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     permissions:
-      contents: read # required for actions/checkout
+      contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Set up Node.js version
+      - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '20.x'
+          node-version: '20.x'   # match your Linux runtime
 
-      - name: Install dependencies and build
+      - name: Install & build backend
+        working-directory: .
+        run: |
+          npm install
+          npm run build
+
+      - name: Install & build frontend
+        working-directory: stock-profit-frontend
         run: |
           npm install
           npm run build
 
       - name: Package production artifacts
         run: |
-          # Create a small zip containing only the built output
-          powershell -Command "Compress-Archive -Path public,dist,package.json,package-lock.json -DestinationPath release.zip -Force"
+          zip -r release.zip \
+            package.json package-lock.json \
+            public dist
 
       - name: Upload release artifact
         uses: actions/upload-artifact@v4
@@ -49,11 +56,10 @@ jobs:
           name: release-package
           path: .
 
-      - name: Deploy to Azure Web App
+      - name: Deploy to Azure Web App (Linux)
         uses: azure/webapps-deploy@v3
         with:
-          app-name: 'stock-profit-app'
+          app-name: 'stock-profit-app' 
           slot-name: 'Production'
           package: 'release.zip'
-          publish-profile: 
-            ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_5191772DC0304D6982CFB69FE9D85652 }}
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE }}
