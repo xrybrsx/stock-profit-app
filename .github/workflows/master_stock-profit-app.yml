@@ -44,7 +44,8 @@ jobs:
           zip -r release.zip \
             package.json package-lock.json \
             public \
-            dist
+            dist \
+            node_modules
 
       - name: Upload release artifact
         uses: actions/upload-artifact@v4
