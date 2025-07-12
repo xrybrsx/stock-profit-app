@@ -34,11 +34,18 @@ jobs:
           npm install
           npm run build
 
+      - name: Debug public folder
+        run: |
+          echo "—— Contents of project-root/public ——"
+          ls -R public
+
       - name: Package production artifacts
         run: |
           zip -r release.zip \
             package.json package-lock.json \
-            public dist
+            public \
+            dist \
+            node_modules
 
       - name: Upload release artifact
         uses: actions/upload-artifact@v4
