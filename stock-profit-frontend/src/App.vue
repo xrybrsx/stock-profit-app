@@ -67,22 +67,22 @@
         </div>
         <div class="result-item">
           <div class="result-label">Shares</div>
-          <div class="result-value">{{ result.numShares.toFixed(4) }}</div>
+          <div class="result-value">{{ safeToFixed(result?.numShares, 4) }}</div>
         </div>
         <div class="result-item">
           <div class="result-label">Gross Profit</div>
-          <div class="result-value profit-positive">${{ result.profit.toFixed(2) }}</div>
+          <div class="result-value profit-positive">${{ safeToFixed(result?.profit, 2) }}</div>
         </div>
       </div>
 
       <div class="costs-row">
         <div class="costs-item">
           <div class="costs-label">Transaction Costs</div>
-          <div class="costs-value">${{ result.totalCost.toFixed(2) }}</div>
+          <div class="costs-value">${{ safeToFixed(result?.totalCost, 2) }}</div>
         </div>
         <div class="costs-item">
           <div class="costs-label">Net Profit</div>
-          <div class="costs-value net-profit">${{ result.netProfit.toFixed(2) }}</div>
+          <div class="costs-value net-profit">${{ safeToFixed(result?.netProfit, 2) }}</div>
         </div>
       </div>
     </div>
@@ -203,6 +203,10 @@ async function getProfit() {
   } catch (e) {
     error.value = e.response?.data?.message || e.message;
   }
+}
+
+function safeToFixed(val, digits = 2) {
+  return typeof val === 'number' ? val.toFixed(digits) : 'N/A';
 }
 </script>
 
