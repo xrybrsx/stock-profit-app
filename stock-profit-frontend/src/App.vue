@@ -24,10 +24,15 @@
     <div v-if="error" class="error-msg">{{ error }}</div>
 
     <div v-if="result" class="result-row">
-      <div class="result-item"><strong>Buy:</strong> {{ shortTime(result.buyTime) }} @ {{ result.buyPrice }}</div>
-      <div class="result-item"><strong>Sell:</strong> {{ shortTime(result.sellTime) }} @ {{ result.sellPrice }}</div>
+      <div class="result-item"><strong>Buy:</strong> {{ shortTime(result.buyTime) }} @ ${{ result.buyPrice }}</div>
+      <div class="result-item"><strong>Sell:</strong> {{ shortTime(result.sellTime) }} @ ${{ result.sellPrice }}</div>
       <div class="result-item"><strong>Shares:</strong> {{ result.numShares.toFixed(4) }}</div>
-      <div class="result-item"><strong>Profit:</strong> {{ result.profit.toFixed(2) }}</div>
+      <div class="result-item"><strong>Gross Profit:</strong> ${{ result.profit.toFixed(2) }}</div>
+    </div>
+
+    <div v-if="result" class="costs-row">
+      <div class="costs-item"><strong>Transaction Costs:</strong> ${{ result.totalCost.toFixed(2) }}</div>
+      <div class="costs-item"><strong>Net Profit:</strong> ${{ result.netProfit.toFixed(2) }}</div>
     </div>
 
     <div ref="chartContainer" class="chart-container"></div>
@@ -183,6 +188,23 @@ async function getProfit() {
 }
 .result-item {
   flex: 1;
+}
+.costs-row {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.95rem;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: #333;
+  border-radius: 4px;
+  border-left: 3px solid #4CAF50;
+}
+.costs-item {
+  flex: 1;
+}
+.costs-item:last-child {
+  color: #4CAF50;
+  font-weight: bold;
 }
 .chart-container {
   width: 100%;

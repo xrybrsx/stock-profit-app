@@ -9,11 +9,17 @@ export interface ProfitResult {
   sellPrice: number;
   numShares: number;
   profit:    number;
-  chartData: { timestamp: string; price: number }[]; // added chartData
+  totalCost: number;
+  netProfit: number;
+  chartData: { timestamp: string; price: number }[];
 }
 
 @Injectable()
 export class ProfitService {
+  // Transaction costs (configurable)
+  private readonly TRANSACTION_FEE_PERCENT = 0.1; // 0.1% per transaction
+  private readonly MIN_TRANSACTION_FEE = 1.0; // $1 minimum fee
+
   constructor(private readonly pricesService: PricesService) {}
 
   private sanitizeInput(value: any): any {
@@ -51,6 +57,15 @@ export class ProfitService {
     }
   }
 
+  private calculateTransactionFee(amount: number): number {
+    const fee = amount * (this.TRANSACTION_FEE_PERCENT / 100);
+    return Math.max(fee, this.MIN_TRANSACTION_FEE);
+  }
+
+  private roundToCents(amount: number): number {
+    return Math.round(amount * 100) / 100;
+  }
+
   calculateProfit(
     startTime: string,
     endTime:   string,
@@ -73,39 +88,56 @@ export class ProfitService {
       );
     }
 
-    let minPoint = slice[0];
     let best = null as ProfitResult | null;
 
-    // Single-pass O(n) scan
-    for (let i = 1; i < slice.length; i++) {
-      const current = slice[i];
-      const numShares = sanitizedFunds / minPoint.price;
-      const profit    = (current.price - minPoint.price) * numShares;
-
-      if (!best || profit > best.profit) {
-        best = {
-          buyTime:   minPoint.timestamp,
-          sellTime:  current.timestamp,
-          buyPrice:  minPoint.price,
-          sellPrice: current.price,
-          numShares: parseFloat(numShares.toFixed(4)),
-          profit:    parseFloat(profit.toFixed(2)),
-          chartData: slice, // attach the entire time series slice
-        };
-      }
-
-      if (current.price < minPoint.price) {
-        minPoint = current;
+    // Realistic trading algorithm: find best buy-sell combination
+    // You can only sell after you buy
+    for (let buyIndex = 0; buyIndex < slice.length - 1; buyIndex++) {
+      const buyPoint = slice[buyIndex];
+      
+      // Calculate how many shares we can buy with available funds
+      const buyFee = this.calculateTransactionFee(sanitizedFunds);
+      const availableForShares = sanitizedFunds - buyFee;
+      const numShares = availableForShares / buyPoint.price;
+      
+      // Look for the best selling opportunity after buying
+      for (let sellIndex = buyIndex + 1; sellIndex < slice.length; sellIndex++) {
+        const sellPoint = slice[sellIndex];
+        
+        // Calculate gross profit from price difference
+        const grossProfit = (sellPoint.price - buyPoint.price) * numShares;
+        
+        // Calculate transaction costs
+        const sellAmount = sellPoint.price * numShares;
+        const sellFee = this.calculateTransactionFee(sellAmount);
+        const totalFees = buyFee + sellFee;
+        
+        // Calculate net profit
+        const netProfit = grossProfit - totalFees;
+        
+        // Update best trade if this is more profitable
+        if (netProfit > 0 && (!best || netProfit > best.netProfit)) {
+          best = {
+            buyTime:   buyPoint.timestamp,
+            sellTime:  sellPoint.timestamp,
+            buyPrice:  this.roundToCents(buyPoint.price),
+            sellPrice: this.roundToCents(sellPoint.price),
+            numShares: this.roundToCents(numShares),
+            profit:    this.roundToCents(grossProfit),
+            totalCost: this.roundToCents(totalFees),
+            netProfit: this.roundToCents(netProfit),
+            chartData: slice,
+          };
+        }
       }
     }
 
-    if (!best || best.profit <= 0) {
+    if (!best || best.netProfit <= 0) {
       throw new BadRequestException(
-        'No profitable trade found in the given range',
+        'No profitable trade found in the given range after transaction costs',
       );
     }
 
-    // Return the best trade + the original slice for charting
     return best;
   }
 }

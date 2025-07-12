@@ -103,11 +103,14 @@ npm run start:dev
 
 ## Algorithm
 
-The profit calculation uses an optimized O(n) algorithm:
-1. **Single Pass**: Scans through price data once
-2. **Track Minimum**: Maintains the lowest price seen so far
-3. **Calculate Profit**: For each price point, calculates potential profit
-4. **Update Best**: Keeps track of the most profitable buy/sell combination
+The profit calculation uses a realistic trading algorithm that accounts for real-world constraints:
+
+1. **Sequential Trading**: You can only sell after you buy (no short selling)
+2. **Transaction Costs**: Includes realistic fees (0.1% per transaction, $1 minimum)
+3. **Optimal Strategy**: Finds the best buy-sell combination that maximizes net profit
+4. **Precision**: Uses proper rounding to avoid floating-point errors
+
+The algorithm evaluates all possible buy-sell combinations within the time range and selects the one with the highest net profit after transaction costs.
 
 ## UI/UX Features
 
@@ -161,6 +164,8 @@ Calculates the optimal buy/sell strategy.
   "sellPrice": 101.75,
   "numShares": 99.75,
   "profit": 149.63,
+  "totalCost": 2.50,
+  "netProfit": 147.13,
   "chartData": [...]
 }
 ```
