@@ -74,6 +74,9 @@
           <div class="result-value profit-positive">${{ safeToFixed(result?.profit, 2) }}</div>
         </div>
       </div>
+    </div>
+
+    <div v-if="result" class="result-section">
 
       <div class="costs-row">
         <div class="costs-item">
@@ -86,6 +89,7 @@
         </div>
       </div>
     </div>
+ 
 
     <div ref="chartContainer" class="chart-container"></div>
   </div>
@@ -216,9 +220,13 @@ function safeToFixed(val, digits = 2) {
   margin: 2rem auto;
   font-family: sans-serif;
   color: #eee;
+  background-color: #242424;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+ body {
+  background-color: #242424
 }
 .header {
   display: flex;
