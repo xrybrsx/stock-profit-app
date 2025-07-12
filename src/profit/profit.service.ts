@@ -71,6 +71,8 @@ export class ProfitService {
     endTime:   string,
     funds:     number,
   ): ProfitResult {
+    const startTimeMs = Date.now();
+    
     // Sanitize inputs
     const sanitizedStartTime = this.sanitizeInput(startTime);
     const sanitizedEndTime = this.sanitizeInput(endTime);
@@ -89,9 +91,9 @@ export class ProfitService {
     }
 
     let best = null as ProfitResult | null;
+    let calculations = 0;
 
-    // Realistic trading algorithm: find best buy-sell combination
-    // You can only sell after you buy
+    // Optimized algorithm with early termination
     for (let buyIndex = 0; buyIndex < slice.length - 1; buyIndex++) {
       const buyPoint = slice[buyIndex];
       
@@ -100,12 +102,35 @@ export class ProfitService {
       const availableForShares = sanitizedFunds - buyFee;
       const numShares = availableForShares / buyPoint.price;
       
+      // Early termination: if we can't buy any shares, skip
+      if (numShares <= 0) continue;
+      
+      // Find the maximum possible profit for this buy point
+      let maxPriceAfterBuy = buyPoint.price;
+      for (let i = buyIndex + 1; i < slice.length; i++) {
+        if (slice[i].price > maxPriceAfterBuy) {
+          maxPriceAfterBuy = slice[i].price;
+        }
+      }
+      
+      // Calculate potential maximum profit
+      const potentialProfit = (maxPriceAfterBuy - buyPoint.price) * numShares;
+      const potentialFees = buyFee + this.calculateTransactionFee(maxPriceAfterBuy * numShares);
+      const potentialNetProfit = potentialProfit - potentialFees;
+      
+      // Early termination: if this buy point can't beat current best, skip
+      if (best && potentialNetProfit <= best.netProfit) continue;
+      
       // Look for the best selling opportunity after buying
       for (let sellIndex = buyIndex + 1; sellIndex < slice.length; sellIndex++) {
+        calculations++;
         const sellPoint = slice[sellIndex];
         
         // Calculate gross profit from price difference
         const grossProfit = (sellPoint.price - buyPoint.price) * numShares;
+        
+        // Early termination: if gross profit is negative, skip
+        if (grossProfit <= 0) continue;
         
         // Calculate transaction costs
         const sellAmount = sellPoint.price * numShares;
@@ -126,7 +151,7 @@ export class ProfitService {
             profit:    this.roundToCents(grossProfit),
             totalCost: this.roundToCents(totalFees),
             netProfit: this.roundToCents(netProfit),
-            chartData: slice,
+            chartData: this.pricesService.getChartData(sanitizedStartTime, sanitizedEndTime),
           };
         }
       }
@@ -136,6 +161,12 @@ export class ProfitService {
       throw new BadRequestException(
         'No profitable trade found in the given range after transaction costs',
       );
+    }
+
+    // Log performance metrics in development
+    if (process.env.NODE_ENV === 'development') {
+      const executionTime = Date.now() - startTimeMs;
+      console.log(`Profit calculation: ${calculations} calculations in ${executionTime}ms for ${slice.length} data points`);
     }
 
     return best;

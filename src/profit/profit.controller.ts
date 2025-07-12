@@ -26,6 +26,18 @@ export class ProfitController {
     }
   }
 
+  @Get('stats')
+  getStats() {
+    try {
+      return this.pricesService.getStats();
+    } catch (error) {
+      throw new HttpException(
+        'Failed to retrieve statistics',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
   @Post()
   getProfit(@Body() dto: ProfitDto): ProfitResult {
     try {

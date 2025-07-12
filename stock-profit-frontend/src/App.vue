@@ -92,7 +92,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue';
+import { ref, onMounted, computed, watch, onUnmounted } from 'vue';
 import Highcharts from 'highcharts';
 import api from './services/api.js';
 
@@ -110,13 +110,21 @@ const result    = ref(null);
 const chartOptions = ref(null);
 const error     = ref('');
 const chartContainer = ref(null);
-let chartInstance = null;
 const showInfo = ref(false);
+let chartInstance = null;
 
 onMounted(async () => {
   const res = await api.get('/profit/minmax');
   minTime.value = res.data.min;
   maxTime.value = res.data.max;
+});
+
+onUnmounted(() => {
+  // Clean up chart instance to prevent memory leaks
+  if (chartInstance) {
+    chartInstance.destroy();
+    chartInstance = null;
+  }
 });
 
 const formattedMin = computed(() => new Date(minTime.value).toLocaleString());
@@ -126,7 +134,14 @@ const canCalculate = computed(() => startTime.value && endTime.value && funds.va
 
 watch(chartOptions, (options) => {
   if (!options || !chartContainer.value) return;
-  if (chartInstance) chartInstance.destroy();
+  
+  // Clean up existing chart before creating new one
+  if (chartInstance) {
+    chartInstance.destroy();
+    chartInstance = null;
+  }
+  
+  // Create new chart
   chartInstance = Highcharts.chart(chartContainer.value, options);
 });
 
@@ -134,6 +149,13 @@ async function getProfit() {
   error.value = '';
   result.value = null;
   chartOptions.value = null;
+  
+  // Clean up existing chart
+  if (chartInstance) {
+    chartInstance.destroy();
+    chartInstance = null;
+  }
+  
   try {
     const payload = {
       startTime: new Date(startTime.value).toISOString(),
