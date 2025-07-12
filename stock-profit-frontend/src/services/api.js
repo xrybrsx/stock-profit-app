@@ -4,14 +4,16 @@ import axios from 'axios';
 const api = axios.create({
   baseURL: '/api',
   headers: { 
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'X-API-Key': process.env.VUE_APP_API_KEY || 'demo-api-key-2024' // Add API key
   },
 });
 
 // Add request interceptor for error handling
 api.interceptors.request.use(
   (config) => {
-    // Add any common headers here if needed
+    // Add API key to all requests
+    config.headers['X-API-Key'] = process.env.VUE_APP_API_KEY || 'demo-api-key-2024';
     return config;
   },
   (error) => {
@@ -23,21 +25,9 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Handle rate limiting
-    if (error.response?.status === 429) {
-      console.error('Rate limit exceeded. Please wait before making more requests.');
+    if (error.response?.status === 401) {
+      console.error('Authentication failed. Please check your API key.');
     }
-    
-    // Handle validation errors
-    if (error.response?.status === 400) {
-      console.error('Validation error:', error.response.data);
-    }
-    
-    // Handle server errors
-    if (error.response?.status >= 500) {
-      console.error('Server error:', error.response.data);
-    }
-    
     return Promise.reject(error);
   }
 );

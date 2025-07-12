@@ -1,9 +1,11 @@
-import { Controller, Post, Body, Get, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, Get, UseGuards, HttpException, HttpStatus } from '@nestjs/common';
 import { ProfitService, ProfitResult } from './profit.service';
 import { ProfitDto }                    from './profit.dto';
 import { PricesService }                from '../prices/prices.service';
+import { ApiKeyGuard }                  from '../auth/api-key.guard';
 
 @Controller('api/profit')
+@UseGuards(ApiKeyGuard) // Protect all endpoints in this controller
 export class ProfitController {
   constructor(private readonly profitService: ProfitService,
   private readonly pricesService: PricesService,  // inject it 
