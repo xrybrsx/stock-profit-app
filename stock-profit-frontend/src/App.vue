@@ -1,38 +1,90 @@
 <template>
   <div class="app-container">
+    <div class="header">
+      <h1>Stock Profit Calculator</h1>
+      <div class="info-icon" @mouseenter="showInfo = true" @mouseleave="showInfo = false">
+        <span>ⓘ</span>
+        <div v-show="showInfo" class="info-tooltip">
+          <h3>How it works:</h3>
+          <p>This calculator finds the optimal buy and sell points within your selected time range to maximize profit.</p>
+          <p>It accounts for transaction fees (0.1% per trade) and only allows buying before selling.</p>
+          <p>The algorithm evaluates all possible buy-sell combinations and shows you the most profitable strategy.</p>
+        </div>
+      </div>
+    </div>
+
     <div class="input-row">
       <div class="input-group">
-        <label>Start</label>
+        <label>Start Time</label>
         <input type="datetime-local" v-model="startTime" :min="minTime" :max="maxTime" />
       </div>
       <div class="input-group">
-        <label>End</label>
+        <label>End Time</label>
         <input type="datetime-local" v-model="endTime" :min="minTime" :max="maxTime" />
       </div>
       <div class="input-group">
-        <label>Funds</label>
-        <input type="number" v-model.number="funds" placeholder="0.00" />
+        <label>Investment Amount (USD)</label>
+        <div class="currency-input">
+          <span class="currency-symbol">$</span>
+          <input type="number" v-model.number="funds" placeholder="0.00" step="0.01" min="0" />
+        </div>
       </div>
     </div>
 
-    <div class="timeframe">
-      Available: {{ formattedMin }} → {{ formattedMax }}
+    <div class="timeframe-info">
+      <div class="timeframe-label">Available Data Range:</div>
+      <div class="timeframe-dates">
+        <span class="date-item">
+          <strong>From:</strong> {{ formattedMin }}
+        </span>
+        <span class="date-separator">→</span>
+        <span class="date-item">
+          <strong>To:</strong> {{ formattedMax }}
+        </span>
+      </div>
+      <div class="timeframe-note">
+        Select any time range within this period to analyze
+      </div>
     </div>
 
-    <button @click="getProfit" class="calc-button">Calculate</button>
+    <button @click="getProfit" class="calc-button" :disabled="!canCalculate">
+      Calculate Optimal Strategy
+    </button>
 
     <div v-if="error" class="error-msg">{{ error }}</div>
 
-    <div v-if="result" class="result-row">
-      <div class="result-item"><strong>Buy:</strong> {{ shortTime(result.buyTime) }} @ ${{ result.buyPrice }}</div>
-      <div class="result-item"><strong>Sell:</strong> {{ shortTime(result.sellTime) }} @ ${{ result.sellPrice }}</div>
-      <div class="result-item"><strong>Shares:</strong> {{ result.numShares.toFixed(4) }}</div>
-      <div class="result-item"><strong>Gross Profit:</strong> ${{ result.profit.toFixed(2) }}</div>
-    </div>
+    <div v-if="result" class="result-section">
+      <h3>Optimal Trading Strategy</h3>
+      
+      <div class="result-row">
+        <div class="result-item">
+          <div class="result-label">Buy</div>
+          <div class="result-value">{{ shortTime(result.buyTime) }} @ ${{ result.buyPrice }}</div>
+        </div>
+        <div class="result-item">
+          <div class="result-label">Sell</div>
+          <div class="result-value">{{ shortTime(result.sellTime) }} @ ${{ result.sellPrice }}</div>
+        </div>
+        <div class="result-item">
+          <div class="result-label">Shares</div>
+          <div class="result-value">{{ result.numShares.toFixed(4) }}</div>
+        </div>
+        <div class="result-item">
+          <div class="result-label">Gross Profit</div>
+          <div class="result-value profit-positive">${{ result.profit.toFixed(2) }}</div>
+        </div>
+      </div>
 
-    <div v-if="result" class="costs-row">
-      <div class="costs-item"><strong>Transaction Costs:</strong> ${{ result.totalCost.toFixed(2) }}</div>
-      <div class="costs-item"><strong>Net Profit:</strong> ${{ result.netProfit.toFixed(2) }}</div>
+      <div class="costs-row">
+        <div class="costs-item">
+          <div class="costs-label">Transaction Costs</div>
+          <div class="costs-value">${{ result.totalCost.toFixed(2) }}</div>
+        </div>
+        <div class="costs-item">
+          <div class="costs-label">Net Profit</div>
+          <div class="costs-value net-profit">${{ result.netProfit.toFixed(2) }}</div>
+        </div>
+      </div>
     </div>
 
     <div ref="chartContainer" class="chart-container"></div>
@@ -59,6 +111,7 @@ const chartOptions = ref(null);
 const error     = ref('');
 const chartContainer = ref(null);
 let chartInstance = null;
+const showInfo = ref(false);
 
 onMounted(async () => {
   const res = await api.get('/profit/minmax');
@@ -69,6 +122,7 @@ onMounted(async () => {
 const formattedMin = computed(() => new Date(minTime.value).toLocaleString());
 const formattedMax = computed(() => new Date(maxTime.value).toLocaleString());
 const shortTime    = ts => new Date(ts).toLocaleTimeString();
+const canCalculate = computed(() => startTime.value && endTime.value && funds.value > 0);
 
 watch(chartOptions, (options) => {
   if (!options || !chartContainer.value) return;
@@ -140,6 +194,46 @@ async function getProfit() {
   flex-direction: column;
   gap: 0.5rem;
 }
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+.header h1 {
+  margin: 0;
+  color: #eee;
+}
+.info-icon {
+  position: relative;
+  cursor: pointer;
+  font-size: 1.5rem;
+  color: #aaa;
+}
+.info-tooltip {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #333;
+  color: #eee;
+  padding: 1rem;
+  border-radius: 5px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  width: 300px;
+  text-align: left;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.info-tooltip h3 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  color: #4CAF50;
+}
+.info-tooltip p {
+  margin-bottom: 0.5rem;
+}
 .input-row {
   display: flex;
   gap: 1rem;
@@ -160,9 +254,45 @@ async function getProfit() {
   border: 1px solid #555;
   color: #eee;
 }
-.timeframe {
+.currency-input {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.currency-symbol {
+  font-size: 1.1rem;
+  color: #aaa;
+}
+.timeframe-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
   font-size: 0.85rem;
   color: #aaa;
+  text-align: center;
+}
+.timeframe-label {
+  font-weight: bold;
+  color: #eee;
+}
+.timeframe-dates {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.date-item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.date-separator {
+  font-size: 1rem;
+  color: #aaa;
+}
+.timeframe-note {
+  font-style: italic;
+  color: #888;
 }
 .calc-button {
   padding: 0.75rem;
@@ -176,18 +306,48 @@ async function getProfit() {
 .calc-button:hover {
   background: #444;
 }
+.calc-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: #555;
+  border-color: #777;
+}
 .error-msg {
   color: #ff5555;
   font-size: 0.9rem;
+}
+.result-section {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #333;
+  border-radius: 4px;
+  border-left: 3px solid #4CAF50;
+}
+.result-section h3 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  color: #4CAF50;
 }
 .result-row {
   display: flex;
   gap: 1rem;
   font-size: 0.95rem;
-  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
 }
 .result-item {
   flex: 1;
+}
+.result-label {
+  font-size: 0.8rem;
+  color: #aaa;
+  margin-bottom: 0.25rem;
+}
+.result-value {
+  font-weight: bold;
+  color: #eee;
+}
+.profit-positive {
+  color: #4CAF50;
 }
 .costs-row {
   display: flex;
@@ -202,9 +362,17 @@ async function getProfit() {
 .costs-item {
   flex: 1;
 }
-.costs-item:last-child {
-  color: #4CAF50;
+.costs-label {
+  font-size: 0.8rem;
+  color: #aaa;
+  margin-bottom: 0.25rem;
+}
+.costs-value {
   font-weight: bold;
+  color: #eee;
+}
+.net-profit {
+  color: #4CAF50;
 }
 .chart-container {
   width: 100%;
