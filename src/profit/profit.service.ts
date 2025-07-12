@@ -90,6 +90,14 @@ export class ProfitService {
       );
     }
 
+    // New: Check if the requested range is within available data
+    const allData = this.pricesService.getAll();
+    const minTimestamp = allData[0]?.timestamp;
+    const maxTimestamp = allData[allData.length - 1]?.timestamp;
+    if (sanitizedStartTime < minTimestamp || sanitizedEndTime > maxTimestamp) {
+      throw new BadRequestException('Selected timeframe is outside available data range');
+    }
+
     let best = null as ProfitResult | null;
     let calculations = 0;
 
