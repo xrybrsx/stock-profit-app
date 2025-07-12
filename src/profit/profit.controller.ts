@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get } from '@nestjs/common';
+import { Controller, Post, Body, Get, HttpException, HttpStatus } from '@nestjs/common';
 import { ProfitService, ProfitResult } from './profit.service';
 import { ProfitDto }                    from './profit.dto';
 import { PricesService }                from '../prices/prices.service';
@@ -11,19 +11,36 @@ export class ProfitController {
 
   @Get('minmax')
   getMinMax() {
-    return {
-      min: this.pricesService.getMinTimestamp(),
-      max: this.pricesService.getMaxTimestamp(),
-    };
+    try {
+      return {
+        min: this.pricesService.getMinTimestamp(),
+        max: this.pricesService.getMaxTimestamp(),
+      };
+    } catch (error) {
+      throw new HttpException(
+        'Failed to retrieve time range',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   @Post()
   getProfit(@Body() dto: ProfitDto): ProfitResult {
-    const { startTime, endTime, funds } = dto;
-    return this.profitService.calculateProfit(
-      startTime,
-      endTime,
-      funds,
-    );
+    try {
+      const { startTime, endTime, funds } = dto;
+      return this.profitService.calculateProfit(
+        startTime,
+        endTime,
+        funds,
+      );
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        'Failed to calculate profit',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 }
