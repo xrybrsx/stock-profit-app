@@ -16,11 +16,11 @@
     <div class="input-row">
       <div class="input-group">
         <label>Start Time</label>
-        <input type="datetime-local" v-model="startTime" :min="minTime" :max="maxTime" />
+        <input type="datetime-local" v-model="startTime" :min="toLocalInputValue(minTime)" :max="toLocalInputValue(maxTime)" />
       </div>
       <div class="input-group">
         <label>End Time</label>
-        <input type="datetime-local" v-model="endTime" :min="minTime" :max="maxTime" />
+        <input type="datetime-local" v-model="endTime" :min="toLocalInputValue(minTime)" :max="toLocalInputValue(maxTime)" />
       </div>
       <div class="input-group">
         <label>Investment Amount (USD)</label>
@@ -80,7 +80,17 @@
 
       <div class="costs-row">
         <div class="costs-item">
-          <div class="costs-label">Transaction Costs</div>
+          <div class="costs-label">
+            Transaction Costs
+            <span class="info-icon" @mouseenter="showCostInfo = true" @mouseleave="showCostInfo = false" @touchstart="showCostInfo = !showCostInfo">
+              ⓘ
+              <div v-show="showCostInfo" class="info-tooltip cost-tooltip">
+                <strong>How transaction costs are calculated:</strong>
+                <p>Each trade (buy and sell) incurs a fee of 0.1% of the transaction amount, with a minimum fee of $1 per trade.</p>
+                <p>Total transaction cost = Buy fee + Sell fee.</p>
+              </div>
+            </span>
+          </div>
           <div class="costs-value">${{ safeToFixed(result?.totalCost, 2) }}</div>
         </div>
         <div class="costs-item">
@@ -115,12 +125,23 @@ const chartOptions = ref(null);
 const error     = ref('');
 const chartContainer = ref(null);
 const showInfo = ref(false);
+const showCostInfo = ref(false);
 let chartInstance = null;
+
+function toLocalInputValue(isoString) {
+  if (!isoString) return '';
+  const date = new Date(isoString);
+  // Pad with zeros for month, day, hour, minute
+  const pad = n => n.toString().padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
 
 onMounted(async () => {
   const res = await api.get('/profit/minmax');
   minTime.value = res.data.min;
   maxTime.value = res.data.max;
+  startTime.value = toLocalInputValue(res.data.min);
+  endTime.value = toLocalInputValue(res.data.max);
 });
 
 onUnmounted(() => {
@@ -187,6 +208,22 @@ async function getProfit() {
         labels: { style: { color: '#eee' } },
         gridLineColor: '#444'
       },
+      tooltip: {
+        formatter: function() {
+          // For line series (Price)
+          if (this.series.type === 'line') {
+            return `<b>Time:</b> ${Highcharts.dateFormat('%Y-%m-%d %H:%M', this.x)}<br/><b>Price:</b> $${this.y.toFixed(2)}`;
+          }
+          // For scatter series (Buy/Sell)
+          if (this.series.type === 'scatter') {
+            return `<b>${this.point.index === 0 ? 'Buy' : 'Sell'}</b><br/><b>Time:</b> ${Highcharts.dateFormat('%Y-%m-%d %H:%M', this.x)}<br/><b>Price:</b> $${this.y.toFixed(2)}`;
+          }
+          return false;
+        },
+        backgroundColor: '#222',
+        borderColor: '#444',
+        style: { color: '#eee', fontSize: '0.95em' }
+      },
       series: [{
         type: 'line',
         data: dataSeries,
@@ -195,13 +232,28 @@ async function getProfit() {
         marker: { enabled: false }
       }, {
         type: 'scatter',
+        name: 'Buy/Sell',
         data: [
           [Date.parse(res.data.buyTime), res.data.buyPrice],
           [Date.parse(res.data.sellTime), res.data.sellPrice]
         ],
         marker: { symbol: 'circle', name: 'Buy/Sell', radius: 6, color: '#901E3E' }
       }],
-      legend: { enabled: false },
+      legend: {
+        enabled: true,
+        align: 'center',
+        verticalAlign: 'bottom',
+        layout: 'horizontal',
+        itemStyle: { color: '#eee', fontWeight: 'normal', fontSize: '0.95em' },
+        symbolHeight: 8,
+        symbolWidth: 24,
+        symbolRadius: 0,
+        backgroundColor: 'transparent',
+        borderWidth: 0,
+        itemMarginTop: 2,
+        itemMarginBottom: 2,
+        itemDistance: 20
+      },
       credits: { enabled: false }
     };
   } catch (e) {
@@ -314,6 +366,8 @@ function safeToFixed(val, digits = 2) {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  justify-content: center; /* Add this to center horizontally */
+  width: 100%;
 }
 .date-item {
   display: flex;
@@ -391,7 +445,6 @@ function safeToFixed(val, digits = 2) {
   padding: 0.5rem;
   background: #333;
   border-radius: 4px;
-  border-left: 3px solid #4CAF50;
 }
 .costs-item {
   flex: 1;
@@ -408,9 +461,22 @@ function safeToFixed(val, digits = 2) {
 .net-profit {
   color: #4CAF50;
 }
+.costs-label .info-icon {
+  font-size: 1rem;
+  vertical-align: middle;
+  margin-left: 0.25rem;
+}
 .chart-container {
   width: 100%;
   height: 300px;
   margin-top: 1rem;
+}
+.cost-tooltip {
+  left: auto;
+  right: 0;
+  min-width: 220px;
+  font-size: 0.9rem;
+  padding: 1rem;
+  line-height: 1.5;
 }
 </style>

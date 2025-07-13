@@ -7,13 +7,16 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Configuration
-const start = new Date('2025-01-01T10:00:00Z');
-const end   = new Date('2025-01-01T11:00:00Z');
+const now = new Date();
+now.setSeconds(0, 0); // round down to the nearest minute
+const end = new Date(now.toISOString());
+const start = new Date(end.getTime() - 360 * 60 * 1000); // 6 hours before now
+start.setSeconds(0, 0); // ensure start is also on a whole minute
 const basePrice = 100; // starting stock price
 const fluctuation = 0.5; // max +/- 0.5 change in price per second
 
 const data = [];
-for (let t = start.getTime(); t <= end.getTime(); t += 1000) {
+for (let t = start.getTime(); t <= end.getTime(); t += 60 * 1000) { // 60 * 1000 ms = 1 minute
   const timestamp = new Date(t).toISOString();
   
   // random walk
