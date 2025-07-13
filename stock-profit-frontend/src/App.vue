@@ -13,6 +13,23 @@
       </div>
     </div>
 
+    
+    <div class="timeframe-info">
+      <div class="timeframe-label">Available Data Range:</div>
+      <div class="timeframe-dates">
+        <span class="date-item">
+          <strong>From:</strong> {{ formattedMin }}
+        </span>
+        <span class="date-separator">→</span>
+        <span class="date-item">
+          <strong>To:</strong> {{ formattedMax }}
+        </span>
+      </div>
+      <div class="timeframe-note">
+        Select any time range within this period to analyze
+      </div>
+    </div>
+
     <div class="input-row">
       <div class="input-group">
         <label>Start Time</label>
@@ -31,21 +48,6 @@
       </div>
     </div>
 
-    <div class="timeframe-info">
-      <div class="timeframe-label">Available Data Range:</div>
-      <div class="timeframe-dates">
-        <span class="date-item">
-          <strong>From:</strong> {{ formattedMin }}
-        </span>
-        <span class="date-separator">→</span>
-        <span class="date-item">
-          <strong>To:</strong> {{ formattedMax }}
-        </span>
-      </div>
-      <div class="timeframe-note">
-        Select any time range within this period to analyze
-      </div>
-    </div>
 
     <button @click="getProfit" class="calc-button" :disabled="!canCalculate">
       Calculate Optimal Strategy
@@ -359,11 +361,14 @@ function safeToFixed(val, digits = 2) {
   text-align: center;
 }
 .timeframe-label {
-  font-weight: bold;
+  font-weight: bolder;
+  font-size: large;
   color: #eee;
 }
 .timeframe-dates {
   display: flex;
+  font-size: 1rem;
+  color: #eee;
   align-items: center;
   gap: 0.5rem;
   justify-content: center; /* Add this to center horizontally */
