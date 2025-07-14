@@ -4,13 +4,14 @@ import { ProfitDto }                    from './profit.dto';
 import { PricesService }                from '../prices/prices.service';
 import { ApiKeyGuard }                  from '../auth/api-key.guard';
 
-@Controller('api/profit')
+@Controller('api/profit') // base path for all endpoints in this controller
 @UseGuards(ApiKeyGuard) // Protect all endpoints in this controller
 export class ProfitController {
   constructor(private readonly profitService: ProfitService,
   private readonly pricesService: PricesService,  // inject it 
   ){}
 
+  // get the min and max timestamps of the price data
   @Get('minmax')
   getMinMax() {
     try {
@@ -26,6 +27,7 @@ export class ProfitController {
     }
   }
 
+  // get the statistics of the price data
   @Get('stats')
   getStats() {
     try {
@@ -38,10 +40,11 @@ export class ProfitController {
     }
   }
 
+  // calculate the profit
   @Post()
   getProfit(@Body() dto: ProfitDto): ProfitResult {
     try {
-      const { startTime, endTime, funds } = dto;
+      const { startTime, endTime, funds } = dto; // destructure the dto object
       return this.profitService.calculateProfit(
         startTime,
         endTime,

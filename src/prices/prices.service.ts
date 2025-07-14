@@ -58,6 +58,7 @@ export class PricesService implements OnModuleInit {
   getRange(start: string, end: string, limit?: number): PricePoint[] {
     this.loadData();
     
+    // filter data to only include points within the start and end timestamps
     const filtered = this.data.filter(p => start <= p.timestamp && p.timestamp <= end);
     
     // Apply limit if specified
@@ -76,8 +77,9 @@ export class PricesService implements OnModuleInit {
   // Optimized method for chart data - returns sampled data for large ranges
   getChartData(start: string, end: string): PricePoint[] {
     this.loadData();
-    
-    const filtered = this.data.filter(p => start <= p.timestamp && p.timestamp <= end);
+
+    // filter data to only include points within the start and end timestamps
+    const filtered = this.data.filter(p => start <= p.timestamp && p.timestamp <= end); 
     
     // If we have too many points, sample them
     if (filtered.length > this.MAX_CHART_POINTS) {

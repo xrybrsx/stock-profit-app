@@ -5,7 +5,7 @@ const api = axios.create({
   baseURL: '/api',
   headers: { 
     'Content-Type': 'application/json',
-    'X-API-Key': process.env.VUE_APP_API_KEY || 'demo-api-key-2024' // Add API key
+    'X-API-Key': process.env.API_KEY // Add API key
   },
 });
 
@@ -13,7 +13,7 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     // Add API key to all requests
-    config.headers['X-API-Key'] = process.env.VUE_APP_API_KEY || 'demo-api-key-2024';
+    config.headers['X-API-Key'] = import.meta.env.VITE_API_KEY; ;
     return config;
   },
   (error) => {

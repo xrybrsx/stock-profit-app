@@ -10,8 +10,12 @@ export class ApiKeyGuard implements CanActivate {
     const apiKey = request.headers['x-api-key'];
     
     // Get API key from environment variable
-    const validApiKey = process.env.API_KEY || 'demo-api-key-2024';
-    
+    const validApiKey = process.env.API_KEY;
+    if (!validApiKey) {
+      throw new UnauthorizedException('API key is not set on the server');
+    }
+
+    // Check if API key is valid
     if (!apiKey || apiKey !== validApiKey) {
       throw new UnauthorizedException('Invalid or missing API key');
     }

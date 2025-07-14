@@ -22,13 +22,14 @@ export class ProfitService {
 
   constructor(private readonly pricesService: PricesService) {}
 
+  // sanitize the input by trimming the string
   private sanitizeInput(value: any): any {
     if (typeof value === 'string') {
       return value.trim();
     }
     return value;
   }
-
+  y
   private validateFunds(funds: number): void {
     if (funds <= 0) {
       throw new BadRequestException('Funds must be a positive number');
@@ -51,9 +52,9 @@ export class ProfitService {
     }
     
     // Prevent requests for very large date ranges
-    const diffInDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
-    if (diffInDays > 30) {
-      throw new BadRequestException('Date range cannot exceed 30 days');
+    const diffInDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24); // convert to days
+    if (diffInDays > 1) {
+      throw new BadRequestException('Date range cannot exceed 1 day');
     }
   }
 
@@ -84,13 +85,8 @@ export class ProfitService {
 
     // Fetch full slice of data
     const slice = this.pricesService.getRange(sanitizedStartTime, sanitizedEndTime);
-    if (slice.length < 2) {
-      throw new BadRequestException(
-        'Not enough data points in the given range',
-      );
-    }
-
-    // New: Check if the requested range is within available data
+   
+    // Check if the requested range is within available data
     const allData = this.pricesService.getAll();
     const minTimestamp = allData[0]?.timestamp;
     const maxTimestamp = allData[allData.length - 1]?.timestamp;
@@ -149,18 +145,37 @@ export class ProfitService {
         const netProfit = grossProfit - totalFees;
         
         // Update best trade if this is more profitable
-        if (netProfit > 0 && (!best || netProfit > best.netProfit)) {
-          best = {
-            buyTime:   buyPoint.timestamp,
-            sellTime:  sellPoint.timestamp,
-            buyPrice:  this.roundToCents(buyPoint.price),
-            sellPrice: this.roundToCents(sellPoint.price),
-            numShares: this.roundToCents(numShares),
-            profit:    this.roundToCents(grossProfit),
-            totalCost: this.roundToCents(totalFees),
-            netProfit: this.roundToCents(netProfit),
-            chartData: this.pricesService.getChartData(sanitizedStartTime, sanitizedEndTime),
-          };
+        if (netProfit > 0) {
+          if (
+            !best ||
+            netProfit > best.netProfit ||
+            (
+              netProfit === best.netProfit &&
+              (
+                // Prefer shorter interval
+                (Date.parse(sellPoint.timestamp) - Date.parse(buyPoint.timestamp)) <
+                (Date.parse(best.sellTime) - Date.parse(best.buyTime))
+              ) ||
+              (
+                // If interval is also equal, prefer earlier buy time
+                (Date.parse(sellPoint.timestamp) - Date.parse(buyPoint.timestamp)) ===
+                (Date.parse(best.sellTime) - Date.parse(best.buyTime)) &&
+                Date.parse(buyPoint.timestamp) < Date.parse(best.buyTime)
+              )
+            )
+          ) {
+            best = {
+              buyTime:   buyPoint.timestamp,
+              sellTime:  sellPoint.timestamp,
+              buyPrice:  this.roundToCents(buyPoint.price),
+              sellPrice: this.roundToCents(sellPoint.price),
+              numShares: this.roundToCents(numShares),
+              profit:    this.roundToCents(grossProfit),
+              totalCost: this.roundToCents(totalFees),
+              netProfit: this.roundToCents(netProfit),
+              chartData: this.pricesService.getChartData(sanitizedStartTime, sanitizedEndTime),
+            };
+          }
         }
       }
     }

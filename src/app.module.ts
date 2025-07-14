@@ -6,12 +6,16 @@ import { PricesModule }                        from './prices/prices.module';
 import { ProfitController }                    from './profit/profit.controller';
 import { ProfitService }                       from './profit/profit.service';
 import { SecurityMiddleware }                  from './middleware/security.middleware';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
   imports: [
+    ConfigModule.forRoot({
+      isGlobal: true, // makes config available everywhere
+    }),
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'public'),
-      exclude: ['/api*'],   // leave /api to your controllers
+      exclude: ['/api*'],
     }),
     ThrottlerModule.forRoot([
       {

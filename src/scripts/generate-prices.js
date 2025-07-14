@@ -10,7 +10,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const now = new Date();
 now.setSeconds(0, 0); // round down to the nearest minute
 const end = new Date(now.toISOString());
-const start = new Date(end.getTime() - 360 * 60 * 1000); // 6 hours before now
+const start = new Date(end.getTime() - 24 * 60 * 60 * 1000); // 24 hours before now
 start.setSeconds(0, 0); // ensure start is also on a whole minute
 const basePrice = 100; // starting stock price
 const fluctuation = 0.5; // max +/- 0.5 change in price per second
