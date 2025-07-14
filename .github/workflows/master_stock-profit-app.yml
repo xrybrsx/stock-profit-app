@@ -29,10 +29,18 @@ jobs:
           npm run build
 
       - name: Install & build frontend
-        working-directory: stock-profit-frontend
+        working-directory: ./stock-profit-frontend
+        env:
+          VITE_API_KEY: ${{ secrets.VITE_API_KEY }}
         run: |
           npm install
           npm run build
+          if [ -z "${VITE_API_KEY}" ]; then
+            echo "❌ VITE_API_KEY empty"
+            exit 1
+          else
+            echo "✅ VITE_API_KEY present"
+          fi
 
       - name: Debug public folder
         run: |
@@ -44,7 +52,7 @@ jobs:
           zip -r release.zip \
             package.json package-lock.json \
             public \
-            dist \
+            stock-profit-frontend/dist \
             node_modules
 
       - name: Upload release artifact
