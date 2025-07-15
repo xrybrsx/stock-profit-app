@@ -6,6 +6,7 @@ describe('ProfitService', () => {
   let service: ProfitService;
   let pricesService: PricesService;
 
+  // before each test, create a new instance of the ProfitService
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -35,12 +36,14 @@ describe('ProfitService', () => {
     expect(service).toBeDefined();
   });
 
+  // test that the profit service can calculate profit for a simple case
   it('should calculate profit for a simple case', () => {
     const result = service.calculateProfit(
       '2024-01-01T09:00:00Z',
       '2024-01-01T10:00:00Z',
       1000
     );
+    // test that the result has the expected properties
     expect(result).toHaveProperty('buyTime');
     expect(result).toHaveProperty('sellTime');
     expect(result.netProfit).toBeGreaterThan(0);

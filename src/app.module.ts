@@ -8,6 +8,7 @@ import { ProfitService }                       from './profit/profit.service';
 import { SecurityMiddleware }                  from './middleware/security.middleware';
 import { ConfigModule } from '@nestjs/config';
 
+
 @Module({
   imports: [
     ConfigModule.forRoot({

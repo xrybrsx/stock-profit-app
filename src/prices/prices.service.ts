@@ -103,6 +103,7 @@ export class PricesService implements OnModuleInit {
         start: this.data[0].timestamp,
         end: this.data[this.data.length - 1].timestamp
       },
+      // get the min and max price
       priceRange: {
         min: Math.min(...this.data.map(p => p.price)),
         max: Math.max(...this.data.map(p => p.price))

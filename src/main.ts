@@ -7,7 +7,7 @@ async function bootstrap() {
 
   // Configure CORS based on environment
   const allowedOrigins = process.env.NODE_ENV === 'production' 
-    ? [process.env.FRONTEND_URL || 'https://yourdomain.com'] // Configure this for production
+    ? [process.env.FRONTEND_URL] // Production origins
     : ['http://localhost:5173', 'http://localhost:3000']; // Development origins
 
   app.enableCors({
