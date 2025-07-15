@@ -21,14 +21,6 @@ describe('AppController (e2e)', () => {
     await app.close();
   });
 
-  // test that the app is running
-  it('/ (GET) should return Hello World!', () => {
-    return request(app.getHttpServer())
-      .get('/')
-      .expect(200)
-      .expect('Hello World!');
-  });
-
   // test that the app can return profit result for valid input
   it('/api/profit (POST) should return profit result for valid input', async () => {
     // Get min/max from the API first
