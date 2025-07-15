@@ -10,7 +10,7 @@ A web application that calculates the optimal buy/sell strategy for a given stoc
 The application includes:
 - Backend API built with NestJS and TypeScript
 - Frontend built with Vue.js and Highcharts
-- Script to genearte mock data 
+- Script to generate mock data 
 - Deployment on Azure App Service and CI/CD with GitHub Actions
 
 ## Features
