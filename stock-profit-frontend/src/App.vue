@@ -7,7 +7,7 @@
         <div v-show="showInfo" class="info-tooltip">
           <h3>How it works:</h3>
           <p>This calculator finds the optimal buy and sell points within your selected time range to maximize profit.</p>
-          <p>It accounts for transaction fees (0.1% per trade) and only allows buying before selling.</p>
+          <!-- <p>It accounts for transaction fees (0.1% per trade) and only allows buying before selling.</p> -->
           <p>The algorithm evaluates all possible buy-sell combinations and shows you the most profitable strategy.</p>
         </div>
       </div>
@@ -72,13 +72,15 @@
           <div class="result-value">{{ safeToFixed(result?.numShares, 4) }}</div>
         </div>
         <div class="result-item">
-          <div class="result-label">Gross Profit</div>
+          <div class="result-label">Profit</div>
           <div class="result-value profit-positive">${{ safeToFixed(result?.profit, 2) }}</div>
         </div>
       </div>
     </div>
 
-    <div v-if="result" class="result-section">
+    <!-- Uncomment this section if you want to show transaction costs -->
+     
+    <!-- <div v-if="result" class="result-section">
 
       <div class="costs-row">
         <div class="costs-item">
@@ -101,7 +103,7 @@
         </div>
       </div>
     </div>
- 
+  -->
 
     <div ref="chartContainer" class="chart-container"></div>
   </div>

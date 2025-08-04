@@ -48,4 +48,22 @@ describe('ProfitService', () => {
     expect(result).toHaveProperty('sellTime');
     expect(result.netProfit).toBeGreaterThan(0);
   });
+
+    describe('roundToCents()', () => {
+    // [input, expected]
+    const cases: Array<[number, number]> = [
+      [2.344,   2.34],
+      [2.345,   2.35],   // half-up edge
+      [3.3333,  3.33],
+      [5.6789,  5.68],
+      [123.456, 123.46],
+    ];
+
+    it.each(cases)('rounds %p → %p', (input, expected) => {
+      const actual = (service as any).roundToCents(input);
+      expect(actual).toBe(expected);
+    });
+  });
+  
+
 }); 

@@ -1,5 +1,6 @@
 // src/profit/profit.service.ts
 import { Injectable, BadRequestException } from '@nestjs/common';
+import Decimal from 'decimal.js';
 import { PricesService } from '../prices/prices.service';
 
 export interface ProfitResult {
@@ -9,32 +10,27 @@ export interface ProfitResult {
   sellPrice: number;
   numShares: number;
   profit:    number;
-  totalCost: number;
-  netProfit: number;
+  totalCost: number;    // now simply equal to total spent (no fees)
+  netProfit: number;    // identical to profit
   chartData: { timestamp: string; price: number }[];
 }
 
 @Injectable()
 export class ProfitService {
-  // Transaction costs (configurable)
-  private readonly TRANSACTION_FEE_PERCENT = 0.1; // 0.1% per transaction
-  private readonly MIN_TRANSACTION_FEE = 1.0; // $1 minimum fee
-
   constructor(private readonly pricesService: PricesService) {}
 
-  // sanitize the input by trimming the string
   private sanitizeInput(value: any): any {
     if (typeof value === 'string') {
       return value.trim();
     }
     return value;
   }
-  y
+
   private validateFunds(funds: number): void {
     if (funds <= 0) {
       throw new BadRequestException('Funds must be a positive number');
     }
-    if (funds > 1000000) { // Reasonable upper limit
+    if (funds > 100000000) {
       throw new BadRequestException('Funds amount too large');
     }
   }
@@ -42,29 +38,19 @@ export class ProfitService {
   private validateDateRange(startTime: string, endTime: string): void {
     const start = new Date(startTime);
     const end = new Date(endTime);
-    
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-      throw new BadRequestException('Invalid date format');
+    if (isNaN(start.getTime()) || isNaN(end.getTime()) || start >= end) {
+      throw new BadRequestException('Invalid or reversed date range');
     }
-    
-    if (start >= end) {
-      throw new BadRequestException('Start time must be before end time');
+    const diffDays = (end.getTime() - start.getTime()) / 86400000;
+    if (diffDays > 90) {
+      throw new BadRequestException('Date range cannot exceed 90 days');
     }
-    
-    // Prevent requests for very large date ranges
-    const diffInDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24); // convert to days
-    if (diffInDays > 1) {
-      throw new BadRequestException('Date range cannot exceed 1 day');
-    }
-  }
-
-  private calculateTransactionFee(amount: number): number {
-    const fee = amount * (this.TRANSACTION_FEE_PERCENT / 100);
-    return Math.max(fee, this.MIN_TRANSACTION_FEE);
   }
 
   private roundToCents(amount: number): number {
-    return Math.round(amount * 100) / 100;
+    return new Decimal(amount)
+      .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
+      .toNumber();
   }
 
   calculateProfit(
@@ -72,127 +58,70 @@ export class ProfitService {
     endTime:   string,
     funds:     number,
   ): ProfitResult {
-    const startTimeMs = Date.now();
-    
-    // Sanitize inputs
-    const sanitizedStartTime = this.sanitizeInput(startTime);
-    const sanitizedEndTime = this.sanitizeInput(endTime);
-    const sanitizedFunds = Number(this.sanitizeInput(funds));
+    const t0 = Date.now();
 
-    // Validate inputs
-    this.validateFunds(sanitizedFunds);
-    this.validateDateRange(sanitizedStartTime, sanitizedEndTime);
+    // sanitize & validate
+    const sT = this.sanitizeInput(startTime);
+    const eT = this.sanitizeInput(endTime);
+    const F  = Number(this.sanitizeInput(funds));
+    this.validateFunds(F);
+    this.validateDateRange(sT, eT);
 
-    // Fetch full slice of data
-    const slice = this.pricesService.getRange(sanitizedStartTime, sanitizedEndTime);
-   
-    // Check if the requested range is within available data
-    const allData = this.pricesService.getAll();
-    const minTimestamp = allData[0]?.timestamp;
-    const maxTimestamp = allData[allData.length - 1]?.timestamp;
-    if (sanitizedStartTime < minTimestamp || sanitizedEndTime > maxTimestamp) {
-      throw new BadRequestException('Selected timeframe is outside available data range');
+    // fetch data
+    const slice = this.pricesService.getRange(sT, eT);
+    if (slice.length < 2) {
+      throw new BadRequestException('Not enough data points for profit calculation');
     }
 
-    let best = null as ProfitResult | null;
-    let calculations = 0;
+    // one-pass max-profit scan
+    let minPricePoint    = slice[0];
+    let bestProfit       = 0;
+    let bestBuyPoint     = slice[0];
+    let bestSellPoint    = slice[1];
 
-    // Optimized algorithm with early termination
-    for (let buyIndex = 0; buyIndex < slice.length - 1; buyIndex++) {
-      const buyPoint = slice[buyIndex];
-      
-      // Calculate how many shares we can buy with available funds
-      const buyFee = this.calculateTransactionFee(sanitizedFunds);
-      const availableForShares = sanitizedFunds - buyFee;
-      const numShares = availableForShares / buyPoint.price;
-      
-      // Early termination: if we can't buy any shares, skip
-      if (numShares <= 0) continue;
-      
-      // Find the maximum possible profit for this buy point
-      let maxPriceAfterBuy = buyPoint.price;
-      for (let i = buyIndex + 1; i < slice.length; i++) {
-        if (slice[i].price > maxPriceAfterBuy) {
-          maxPriceAfterBuy = slice[i].price;
-        }
+    for (let i = 1; i < slice.length; i++) {
+      const pt = slice[i];
+
+      // compute potential profit if sold here
+      const shares    = F / minPricePoint.price;
+      const grossProf = (pt.price - minPricePoint.price) * shares;
+      if (grossProf > bestProfit) {
+        bestProfit    = grossProf;
+        bestBuyPoint  = minPricePoint;
+        bestSellPoint = pt;
       }
-      
-      // Calculate potential maximum profit
-      const potentialProfit = (maxPriceAfterBuy - buyPoint.price) * numShares;
-      const potentialFees = buyFee + this.calculateTransactionFee(maxPriceAfterBuy * numShares);
-      const potentialNetProfit = potentialProfit - potentialFees;
-      
-      // Early termination: if this buy point can't beat current best, skip
-      if (best && potentialNetProfit <= best.netProfit) continue;
-      
-      // Look for the best selling opportunity after buying
-      for (let sellIndex = buyIndex + 1; sellIndex < slice.length; sellIndex++) {
-        calculations++;
-        const sellPoint = slice[sellIndex];
-        
-        // Calculate gross profit from price difference
-        const grossProfit = (sellPoint.price - buyPoint.price) * numShares;
-        
-        // Early termination: if gross profit is negative, skip
-        if (grossProfit <= 0) continue;
-        
-        // Calculate transaction costs
-        const sellAmount = sellPoint.price * numShares;
-        const sellFee = this.calculateTransactionFee(sellAmount);
-        const totalFees = buyFee + sellFee;
-        
-        // Calculate net profit
-        const netProfit = grossProfit - totalFees;
-        
-        // Update best trade if this is more profitable
-        if (netProfit > 0) {
-          if (
-            !best ||
-            netProfit > best.netProfit ||
-            (
-              netProfit === best.netProfit &&
-              (
-                // Prefer shorter interval
-                (Date.parse(sellPoint.timestamp) - Date.parse(buyPoint.timestamp)) <
-                (Date.parse(best.sellTime) - Date.parse(best.buyTime))
-              ) ||
-              (
-                // If interval is also equal, prefer earlier buy time
-                (Date.parse(sellPoint.timestamp) - Date.parse(buyPoint.timestamp)) ===
-                (Date.parse(best.sellTime) - Date.parse(best.buyTime)) &&
-                Date.parse(buyPoint.timestamp) < Date.parse(best.buyTime)
-              )
-            )
-          ) {
-            best = {
-              buyTime:   buyPoint.timestamp,
-              sellTime:  sellPoint.timestamp,
-              buyPrice:  this.roundToCents(buyPoint.price),
-              sellPrice: this.roundToCents(sellPoint.price),
-              numShares: this.roundToCents(numShares),
-              profit:    this.roundToCents(grossProfit),
-              totalCost: this.roundToCents(totalFees),
-              netProfit: this.roundToCents(netProfit),
-              chartData: this.pricesService.getChartData(sanitizedStartTime, sanitizedEndTime),
-            };
-          }
-        }
+
+      // update minimum‐seen price
+      if (pt.price < minPricePoint.price) {
+        minPricePoint = pt;
       }
     }
 
-    if (!best || best.netProfit <= 0) {
-      throw new BadRequestException(
-        'No profitable trade found in the given range after transaction costs',
-      );
+    if (bestProfit <= 0) {
+      throw new BadRequestException('No profitable trade found in the given range');
     }
 
-    // Log performance metrics in development
+    const numShares   = F / bestBuyPoint.price;
+    const totalCost   = bestBuyPoint.price * numShares;
+    const profit      = bestProfit;
+    const netProfit   = profit; 
+    const chartData   = this.pricesService.getChartData(sT, eT);
+
+    // log perf in dev
     if (process.env.NODE_ENV === 'development') {
-      const executionTime = Date.now() - startTimeMs;
-      console.log(`Profit calculation: ${calculations} calculations in ${executionTime}ms for ${slice.length} data points`);
+      console.log(`Profit scan in ${Date.now() - t0}ms over ${slice.length} points`);
     }
 
-    return best;
+    return {
+      buyTime:   bestBuyPoint.timestamp,
+      sellTime:  bestSellPoint.timestamp,
+      buyPrice:  this.roundToCents(bestBuyPoint.price),
+      sellPrice: this.roundToCents(bestSellPoint.price),
+      numShares: this.roundToCents(numShares),
+      profit:    this.roundToCents(profit),
+      totalCost: this.roundToCents(totalCost),
+      netProfit: this.roundToCents(netProfit),
+      chartData,
+    };
   }
 }
-
