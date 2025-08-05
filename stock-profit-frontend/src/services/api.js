@@ -21,4 +21,10 @@ api.interceptors.response.use(
   }
 );
 
+export async function getStatsReady() {
+  const res = await api.get('/profit/stats-ready');
+  return res.data.ready; // returns true or false
+}
+
+
 export default api;

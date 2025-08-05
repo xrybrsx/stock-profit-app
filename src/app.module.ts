@@ -7,7 +7,8 @@ import { ProfitController }                    from './profit/profit.controller'
 import { ProfitService }                       from './profit/profit.service';
 import { SecurityMiddleware }                  from './middleware/security.middleware';
 import { ConfigModule } from '@nestjs/config';
-
+import { DataGeneratorService }       from './profit/data-generator.service';
+import { PricesService }              from './prices/prices.service';
 
 @Module({
   imports: [
@@ -27,7 +28,10 @@ import { ConfigModule } from '@nestjs/config';
     PricesModule,
   ],
   controllers: [ProfitController],
-  providers:   [ProfitService],
+  providers:   [ProfitService,
+    PricesService,
+    DataGeneratorService,],
+  
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

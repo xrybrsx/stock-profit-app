@@ -1,12 +1,24 @@
+// src/profit/profit.service.spec.ts
 import { Test, TestingModule } from '@nestjs/testing';
 import { ProfitService } from './profit.service';
 import { PricesService } from '../prices/prices.service';
+import { DataGeneratorService, PricePoint } from './data-generator.service';
 
 describe('ProfitService', () => {
   let service: ProfitService;
-  let pricesService: PricesService;
 
-  // before each test, create a new instance of the ProfitService
+  // simple 2-point stream for testing
+  const pts: PricePoint[] = [
+    { timestamp: '2024-01-01T09:00:00Z', price: 100 },
+    { timestamp: '2024-01-01T10:00:00Z', price: 120 },
+  ];
+
+  const dataGeneratorMock = {
+    generatePriceStream: jest.fn().mockImplementation(async function* () {
+      for (const p of pts) yield p;
+    }),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -14,46 +26,41 @@ describe('ProfitService', () => {
         {
           provide: PricesService,
           useValue: {
-            getRange: () => [
-              { timestamp: '2024-01-01T09:00:00Z', price: 100 },
-              { timestamp: '2024-01-01T10:00:00Z', price: 120 },
-            ],
+            // only getChartData is used in the new flow
             getChartData: () => [],
-            getAll: () => [
-              { timestamp: '2024-01-01T09:00:00Z', price: 100 },
-              { timestamp: '2024-01-01T10:00:00Z', price: 120 },
-            ],
           },
+        },
+        {
+          provide: DataGeneratorService,
+          useValue: dataGeneratorMock,
         },
       ],
     }).compile();
 
     service = module.get<ProfitService>(ProfitService);
-    pricesService = module.get<PricesService>(PricesService);
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
-  // test that the profit service can calculate profit for a simple case
-  it('should calculate profit for a simple case', () => {
-    const result = service.calculateProfit(
+  it('should calculate profit for a simple 2-point stream', async () => {
+    const result = await service.calculateProfit(
       '2024-01-01T09:00:00Z',
       '2024-01-01T10:00:00Z',
-      1000
+      1000,
     );
-    // test that the result has the expected properties
-    expect(result).toHaveProperty('buyTime');
-    expect(result).toHaveProperty('sellTime');
-    expect(result.netProfit).toBeGreaterThan(0);
+
+    // buy at 100, sell at 120 ⇒ shares=1000/100=10 ⇒ profit=(120-100)*10=200
+    expect(result.buyTime).toBe(pts[0].timestamp);
+    expect(result.sellTime).toBe(pts[1].timestamp);
+    expect(result.netProfit).toBe(200);
   });
 
-    describe('roundToCents()', () => {
-    // [input, expected]
+  describe('roundToCents()', () => {
     const cases: Array<[number, number]> = [
       [2.344,   2.34],
-      [2.345,   2.35],   // half-up edge
+      [2.345,   2.35],
       [3.3333,  3.33],
       [5.6789,  5.68],
       [123.456, 123.46],
@@ -64,6 +71,4 @@ describe('ProfitService', () => {
       expect(actual).toBe(expected);
     });
   });
-  
-
-}); 
+});

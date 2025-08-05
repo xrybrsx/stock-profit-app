@@ -13,7 +13,11 @@
       </div>
     </div>
 
-    
+    <div v-if="loadingStats" class="loading-message">
+      <p>⏳ Preparing data… please wait a moment.</p>
+    </div>
+
+    <template v-else>
     <div class="timeframe-info">
       <div class="timeframe-label">Available Data Range:</div>
       <div class="timeframe-dates">
@@ -48,8 +52,7 @@
       </div>
     </div>
 
-
-    <button @click="getProfit" class="calc-button" :disabled="!canCalculate">
+    <button @click="getProfit" class="calc-button" :disabled="!canCalculate || !statsReady">
       Calculate Optimal Strategy
     </button>
 
@@ -79,7 +82,6 @@
     </div>
 
     <!-- Uncomment this section if you want to show transaction costs -->
-     
     <!-- <div v-if="result" class="result-section">
 
       <div class="costs-row">
@@ -106,13 +108,15 @@
   -->
 
     <div ref="chartContainer" class="chart-container"></div>
+    </template>
   </div>
-</template>
+  </template>
 
 <script setup>
 import { ref, onMounted, computed, watch, onUnmounted } from 'vue';
 import Highcharts from 'highcharts';
 import api from './services/api.js';
+import { getStatsReady } from './services/api.js';
 
 // Use local time instead of UTC
 Highcharts.setOptions({
@@ -131,6 +135,8 @@ const chartContainer = ref(null);
 const showInfo = ref(false);
 const showCostInfo = ref(false);
 let chartInstance = null;
+const statsReady = ref(false);
+const loadingStats = ref(true);
 
 function toLocalInputValue(isoString) {
   if (!isoString) return '';
@@ -141,6 +147,23 @@ function toLocalInputValue(isoString) {
 }
 
 onMounted(async () => {
+  // Wait for backend stats cache to be ready
+  while (true) {
+    try {
+      const ready = await getStatsReady();
+      if (ready) {
+        statsReady.value = true;
+        break;
+      }
+    } catch (e) {
+      console.error('Error checking stats:', e);
+    }
+    await new Promise(res => setTimeout(res, 1000)); // wait 1 sec
+  }
+
+  loadingStats.value = false;
+
+  // Now load min/max timestamps
   const res = await api.get('/profit/minmax');
   minTime.value = res.data.min;
   maxTime.value = res.data.max;
@@ -486,4 +509,12 @@ function safeToFixed(val, digits = 2) {
   padding: 1rem;
   line-height: 1.5;
 }
+
+.loading-message {
+  text-align: center;
+  font-size: 1.1rem;
+  color: #aaa;
+  margin-top: 2rem;
+}
+
 </style>

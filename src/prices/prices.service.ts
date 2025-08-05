@@ -1,113 +1,126 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
-import * as fs   from 'fs';
+// src/prices/prices.service.ts
+import { Injectable } from '@nestjs/common';
+import * as fs from 'fs';
 import * as path from 'path';
+import * as readline from 'readline';
 
-// Define the shape of each entry
-interface PricePoint {
+export interface PricePoint {
   timestamp: string;
-  price:     number;
+  price: number;
 }
 
 @Injectable()
-export class PricesService implements OnModuleInit {
-  private data: PricePoint[] = [];
-  private dataLoaded = false;
-  private readonly MAX_CHART_POINTS = 1000; // Limit chart data for performance
+export class PricesService {
+  private readonly filePath = path.resolve(process.cwd(), 'dist/data/3mo-prices.ndjson');
+  private readonly MAX_CHART_POINTS = 1000;
 
-  // Called once when the app boots
-  onModuleInit() {
-    this.loadData();
+  async onModuleInit() {
+  this.warmUpStats(); // don't await — run in background
+}
+
+  private statsCache: {
+  totalPoints: number;
+  dateRange: { start: string; end: string };
+  priceRange: { min: number; max: number };
+} | null = null;
+
+  private async warmUpStats() {
+  try {
+    this.statsCache = await this.getStatsFromStream();
+    console.log('✅ Stats cache ready');
+  } catch (err) {
+    console.error('❌ Failed to preload stats:', err);
   }
+}
 
-  private loadData() {
-    if (this.dataLoaded) return;
-    
-    const file = path.join(__dirname, '../data/prices.json');
-    if (!fs.existsSync(file)) {
-      throw new Error(`Price data not found at ${file}`);
+  private async *streamPoints(): AsyncGenerator<PricePoint> {
+    const fileStream = fs.createReadStream(this.filePath);
+    const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
+
+    for await (const line of rl) {
+      if (line.trim()) yield JSON.parse(line);
     }
-    
-    console.log('Loading price data...');
-    const startTime = Date.now();
-    
-    this.data = JSON.parse(fs.readFileSync(file, 'utf-8'));
-    
-    const loadTime = Date.now() - startTime;
-    console.log(`Loaded ${this.data.length} price points in ${loadTime}ms`);
-    
-    this.dataLoaded = true;
   }
 
-  getMinTimestamp(): string {
-    this.loadData();
-    return this.data[0].timestamp;
-  }
   
-  getMaxTimestamp(): string {
-    this.loadData();
-    return this.data[this.data.length - 1].timestamp;
-  }
 
-  // Return all points
-  getAll(): PricePoint[] {
-    this.loadData();
-    return this.data;
-  }
-
-  // Return only those within start…end with optional limit
-  getRange(start: string, end: string, limit?: number): PricePoint[] {
-    this.loadData();
-    
-    // filter data to only include points within the start and end timestamps
-    const filtered = this.data.filter(p => start <= p.timestamp && p.timestamp <= end);
-    
-    // Apply limit if specified
-    if (limit && filtered.length > limit) {
-      const step = Math.ceil(filtered.length / limit);
-      const sampled: PricePoint[] = [];
-      for (let i = 0; i < filtered.length; i += step) {
-        sampled.push(filtered[i]);
-      }
-      return sampled;
+  async getMinTimestamp(): Promise<string> {
+    for await (const point of this.streamPoints()) {
+      return point.timestamp; // first point
     }
-    
-    return filtered;
+    throw new Error('No data found');
   }
 
-  // Optimized method for chart data - returns sampled data for large ranges
-  getChartData(start: string, end: string): PricePoint[] {
-    this.loadData();
-
-    // filter data to only include points within the start and end timestamps
-    const filtered = this.data.filter(p => start <= p.timestamp && p.timestamp <= end); 
-    
-    // If we have too many points, sample them
-    if (filtered.length > this.MAX_CHART_POINTS) {
-      const step = Math.ceil(filtered.length / this.MAX_CHART_POINTS);
-      const sampled: PricePoint[] = [];
-      for (let i = 0; i < filtered.length; i += step) {
-        sampled.push(filtered[i]);
-      }
-      return sampled;
+  async getMaxTimestamp(): Promise<string> {
+    let last: PricePoint | null = null;
+    for await (const point of this.streamPoints()) {
+      last = point;
     }
-    
-    return filtered;
+    if (!last) throw new Error('No data found');
+    return last.timestamp;
   }
 
-  // Get data statistics for performance monitoring
-  getStats() {
-    this.loadData();
-    return {
-      totalPoints: this.data.length,
-      dateRange: {
-        start: this.data[0].timestamp,
-        end: this.data[this.data.length - 1].timestamp
-      },
-      // get the min and max price
-      priceRange: {
-        min: Math.min(...this.data.map(p => p.price)),
-        max: Math.max(...this.data.map(p => p.price))
+  async getChartData(start: string, end: string): Promise<PricePoint[]> {
+    const result: PricePoint[] = [];
+    const pointsInRange: PricePoint[] = [];
+
+    for await (const point of this.streamPoints()) {
+      if (point.timestamp >= start && point.timestamp <= end) {
+        pointsInRange.push(point);
       }
-    };
+    }
+
+    const step = Math.max(1, Math.floor(pointsInRange.length / this.MAX_CHART_POINTS));
+    for (let i = 0; i < pointsInRange.length; i += step) {
+      result.push(pointsInRange[i]);
+    }
+
+    return result;
   }
+
+ async getStatsFromStream(): Promise<{
+  totalPoints: number;
+  dateRange: { start: string; end: string };
+  priceRange: { min: number; max: number };
+}> {
+  let totalPoints = 0;
+  let start = '';
+  let end = '';
+  let minPrice = Infinity;
+  let maxPrice = -Infinity;
+
+  for await (const point of this.streamPoints()) {
+    totalPoints++;
+    if (!start) start = point.timestamp;
+    end = point.timestamp;
+    if (point.price < minPrice) minPrice = point.price;
+    if (point.price > maxPrice) maxPrice = point.price;
+  }
+
+  if (totalPoints === 0) {
+    throw new Error('No data found for stats');
+  }
+
+  return {
+    totalPoints,
+    dateRange: { start, end },
+    priceRange: { min: minPrice, max: maxPrice },
+  };
+  }
+
+  public isStatsReady(): boolean {
+  return this.statsCache !== null;
+}
+
+  public getStats(): {
+  totalPoints: number;
+  dateRange: { start: string; end: string };
+  priceRange: { min: number; max: number };
+} {
+  if (!this.statsCache) {
+    throw new Error('Stats not ready yet');
+  }
+  return this.statsCache;
+}
+  
 }

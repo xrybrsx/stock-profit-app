@@ -1,54 +1,33 @@
-import { Controller, Post, Body, Get, UseGuards, HttpException, HttpStatus } from '@nestjs/common';
+// src/profit/profit.controller.ts
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  UseGuards,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
+import { ProfitDto } from './profit.dto';
 import { ProfitService, ProfitResult } from './profit.service';
-import { ProfitDto }                    from './profit.dto';
-import { PricesService }                from '../prices/prices.service';
-import { ApiKeyGuard }                  from '../auth/api-key.guard';
+import { PricesService } from '../prices/prices.service';
+import { ApiKeyGuard } from '../auth/api-key.guard';
 
-@Controller('api/profit') // base path for all endpoints in this controller
-@UseGuards(ApiKeyGuard) // Protect all endpoints in this controller
+@Controller('api/profit')
+@UseGuards(ApiKeyGuard)
 export class ProfitController {
-  constructor(private readonly profitService: ProfitService,
-  private readonly pricesService: PricesService,  // inject it 
-  ){}
+  constructor(
+    private readonly profitService: ProfitService,
+    private readonly pricesService: PricesService,
+  ) {}
 
-  // get the min and max timestamps of the price data
-  @Get('minmax')
-  getMinMax() {
-    try {
-      return {
-        min: this.pricesService.getMinTimestamp(),
-        max: this.pricesService.getMaxTimestamp(),
-      };
-    } catch (error) {
-      throw new HttpException(
-        'Failed to retrieve time range',
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
-  }
-
-  // get the statistics of the price data
-  @Get('stats')
-  getStats() {
-    try {
-      return this.pricesService.getStats();
-    } catch (error) {
-      throw new HttpException(
-        'Failed to retrieve statistics',
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
-  }
-
-  // calculate the profit
   @Post()
-  getProfit(@Body() dto: ProfitDto): ProfitResult {
+  async getProfit(@Body() dto: ProfitDto): Promise<ProfitResult> {
     try {
-      const { startTime, endTime, funds } = dto; // destructure the dto object
-      return this.profitService.calculateProfit(
-        startTime,
-        endTime,
-        funds,
+      return await this.profitService.calculateProfit(
+        dto.startTime,
+        dto.endTime,
+        dto.funds,
       );
     } catch (error) {
       if (error instanceof HttpException) {
@@ -56,7 +35,30 @@ export class ProfitController {
       }
       throw new HttpException(
         'Failed to calculate profit',
-        HttpStatus.INTERNAL_SERVER_ERROR
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('stats-ready')
+  isStatsReady(): { ready: boolean } {
+  return { ready: this.pricesService.isStatsReady() };
+}
+
+
+  @Get('minmax')
+  async getMinMax(): Promise<{ min: string; max: string }> {
+    try {
+      // getStats() returns { dateRange: { start, end }, ... }
+      const stats = await this.pricesService.getStats();
+      return {
+        min: stats.dateRange.start,
+        max: stats.dateRange.end,
+      };
+    } catch (error) {
+      throw new HttpException(
+        'Failed to retrieve time range',
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }

@@ -10,7 +10,7 @@
     "build:frontend": "cd stock-profit-frontend && npm install && npm run build",
     "build:backend": "nest build",
     "build": "npm run build:frontend && npm run build:backend && npm run copy:assets",
-    "copy:assets": "copyfiles -u 2 \"src/data/*.json\" dist/data",
+    "copy:assets": "copyfiles -u 2 \"src/data/*.*\" dist/data",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "node dist/main.js",
     "start:dev": "concurrently \"nest start --watch\" \"cd stock-profit-frontend && npm run dev\"",
