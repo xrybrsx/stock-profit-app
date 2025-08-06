@@ -57,75 +57,88 @@ export class ProfitService {
       .toNumber();
   }
 
-  /**
-   * One-pass, streaming profit calculation over ~7.8M points.
-   */
-  async calculateProfit(
-    startTime: string,
-    endTime:   string,
-    funds:     number,
-  ): Promise<ProfitResult> {
-    const t0 = Date.now();
+ async calculateProfit(
+  startTime: string,
+  endTime:   string,
+  funds:     number,
+): Promise<ProfitResult> {
+  const t0 = Date.now();
 
-    // sanitize & validate
-    const sT = this.sanitizeInput(startTime);
-    const eT = this.sanitizeInput(endTime);
-    const F  = Number(this.sanitizeInput(funds));
-    this.validateFunds(F);
-    this.validateDateRange(sT, eT);
+  // ✅ Sanitize inputs
+  const sT = this.sanitizeInput(startTime);
+  const eT = this.sanitizeInput(endTime);
+  const F  = Number(this.sanitizeInput(funds));
+  this.validateFunds(F);
+  this.validateDateRange(sT, eT);
 
-    // stream data one second apart, O(n) memory
-    let minPoint: PricePoint | null = null;
-    let bestBuySell: { buy: PricePoint; sell: PricePoint } | null = null;
-    let bestProfit = 0;
+  // ✅ Stream points to find best buy/sell
+  let minPoint: PricePoint | null = null;
+  let bestBuySell: { buy: PricePoint; sell: PricePoint } | null = null;
+  let bestProfit = 0;
 
-    const stream = this.dataGenerator.generatePriceStream(sT, eT);
-    for await (const pt of stream) {
-      if (!minPoint || pt.price < minPoint.price) {
-        minPoint = pt;
-        continue;
-      }
-      const shares = F / minPoint.price;
-      const profit = (pt.price - minPoint.price) * shares;
-      if (profit > bestProfit) {
-        bestProfit  = profit;
-        bestBuySell = { buy: minPoint, sell: pt };
-      }
+// src/profit/profit.service.ts
+const stream = this.pricesService.streamRange(sT, eT); // replace this:
+
+  for await (const pt of stream) {
+    if (!minPoint || pt.price < minPoint.price) {
+      minPoint = pt;
+      continue;
     }
 
-    if (!bestBuySell || bestProfit <= 0) {
-      throw new BadRequestException('No profitable trade found in the given range');
+    const shares = F / minPoint.price;
+    const profit = (pt.price - minPoint.price) * shares;
+
+    if (profit > bestProfit) {
+      bestProfit  = profit;
+      bestBuySell = { buy: minPoint, sell: pt };
     }
-
-    const { buy, sell } = bestBuySell;
-
-    if (buy.price === 0) {
-      throw new BadRequestException('Buy price cannot be zero');
-    }
-
-    // Use Decimal for precise financial math
-    const numShares = new Decimal(F).div(buy.price);
-    const totalCost = numShares.mul(buy.price);
-    const profit    = numShares.mul(new Decimal(sell.price).minus(buy.price));
-
-    // <-- await here so chartData is PricePoint[], not Promise<PricePoint[]>
-    const chartData = await this.pricesService.getChartData(sT, eT);
-
-    // log perf in dev
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`Profit scan in ${Date.now() - t0}ms over stream`);
-    }
-
-    return {
-      buyTime:   buy.timestamp,
-      sellTime:  sell.timestamp,
-      buyPrice:  this.roundToCents(buy.price),
-      sellPrice: this.roundToCents(sell.price),
-      numShares: this.roundToCents(numShares.toNumber()),
-      profit:    this.roundToCents(profit.toNumber()),
-      totalCost: this.roundToCents(totalCost.toNumber()),
-      netProfit: this.roundToCents(profit.toNumber()),
-      chartData,  // now correctly typed as array
-    };
   }
+
+  if (!bestBuySell || bestProfit <= 0) {
+    throw new BadRequestException('No profitable trade found in the given range');
+  }
+
+  const { buy, sell } = bestBuySell;
+  if (buy.price === 0) {
+    throw new BadRequestException('Buy price cannot be zero');
+  }
+
+  const numShares = F / buy.price;
+  const totalCost = numShares * buy.price;
+  const profit    = (sell.price - buy.price) * numShares;
+
+  // ✅ Get sampled chart data
+  const chartData = await this.pricesService.getChartData(sT, eT);
+
+  // ✅ Snap marker prices to chart for alignment
+function snapToNearest(ts: string): PricePoint | undefined {
+  return chartData.reduce((nearest, p) => {
+    const diff = Math.abs(Date.parse(p.timestamp) - Date.parse(ts));
+    const bestDiff = nearest ? Math.abs(Date.parse(nearest.timestamp) - Date.parse(ts)) : Infinity;
+    return diff < bestDiff ? p : nearest;
+  }, undefined as PricePoint | undefined);
+}
+
+const buySnap  = snapToNearest(buy.timestamp);
+const sellSnap = snapToNearest(sell.timestamp);
+
+const buyY     = buySnap?.price ?? this.roundToCents(buy.price);
+const sellY    = sellSnap?.price ?? this.roundToCents(sell.price);
+
+  // 🧪 Log perf
+  const duration = Date.now() - t0;
+  console.log(`[PROFIT] Took ${duration}ms for range ${startTime} → ${endTime}`);
+
+  return {
+    buyTime:   buy.timestamp,
+    sellTime:  sell.timestamp,
+    buyPrice:  this.roundToCents(buyY),
+    sellPrice: this.roundToCents(sellY),
+    numShares: this.roundToCents(numShares),
+    profit:    this.roundToCents(profit),
+    totalCost: this.roundToCents(totalCost),
+    netProfit: this.roundToCents(profit),
+    chartData,
+  };
+}
 }

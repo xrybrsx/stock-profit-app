@@ -78,6 +78,13 @@ export class PricesService {
     return result;
   }
 
+
+  async *streamRange(start: string, end: string): AsyncGenerator<PricePoint> {
+  for await (const p of this.streamPoints()) {
+    if (p.timestamp >= start && p.timestamp <= end) yield p;
+  }
+}
+
  async getStatsFromStream(): Promise<{
   totalPoints: number;
   dateRange: { start: string; end: string };
