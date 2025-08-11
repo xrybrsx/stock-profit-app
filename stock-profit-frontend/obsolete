@@ -1,0 +1,21 @@
+# # ---------- build stage ----------
+# FROM node:18 AS build
+# WORKDIR /app
+
+# # Install deps
+# COPY package*.json ./
+# RUN npm install
+
+# # Build
+# COPY . .
+# RUN rm -rf dist && npm run build
+
+# # ---------- runtime (nginx) ----------
+# FROM nginx:alpine
+# # Custom Nginx config for SPA
+# COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# # Static files
+# COPY --from=build /app/dist /usr/share/nginx/html
+
+# EXPOSE 80

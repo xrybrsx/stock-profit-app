@@ -11,15 +11,21 @@ export class ApiKeyGuard implements CanActivate {
     
     // Get API key from environment variable
     const validApiKey = process.env.API_KEY;
+
+    // If server does not define an API key, allow all (useful for local/dev and container testing)
     if (!validApiKey) {
-      throw new UnauthorizedException('API key is not set on the server');
+      // No API key configured on server; allow all requests (likely dev/test)
+      return true;
     }
 
-    // Check if API key is valid
+    // Otherwise require a matching key
     if (!apiKey || apiKey !== validApiKey) {
+      const clientId = request.ip || request.connection?.remoteAddress;
+      const path = request.originalUrl || request.url;
+      console.warn(`[AUTH] 401 Invalid or missing API key | ip=${clientId} path=${path}`);
       throw new UnauthorizedException('Invalid or missing API key');
     }
-    
+
     return true;
   }
 } 

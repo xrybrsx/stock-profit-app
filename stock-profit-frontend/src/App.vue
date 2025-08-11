@@ -2,7 +2,7 @@
   <div class="app-container">
     <div class="header">
       <h1>Stock Profit Calculator</h1>
-      <div class="info-icon" @mouseenter="showInfo = true" @mouseleave="showInfo = false">
+      <div v-if="!loadingStats" class="info-icon" @mouseenter="showInfo = true" @mouseleave="showInfo = false">
         <span>ⓘ</span>
         <div v-show="showInfo" class="info-tooltip">
           <h3>How it works:</h3>
@@ -52,8 +52,8 @@
       </div>
     </div>
 
-    <button @click="getProfit" class="calc-button" :disabled="!canCalculate || !statsReady">
-      Calculate Optimal Strategy
+    <button @click="getProfit" class="calc-button" :disabled="!canCalculate || !statsReady || loading">
+         {{ loading ? 'Calculating...' : ' Calculate Optimal Strategy' }}
     </button>
 
     <div v-if="error" class="error-msg">{{ error }}</div>
@@ -137,6 +137,7 @@ const showCostInfo = ref(false);
 let chartInstance = null;
 const statsReady = ref(false);
 const loadingStats = ref(true);
+const loading = ref(false)
 
 function toLocalInputValue(isoString) {
   if (!isoString) return '';
@@ -198,6 +199,7 @@ watch(chartOptions, (options) => {
 });
 
 async function getProfit() {
+  loading.value = true
   error.value = '';
   result.value = null;
   chartOptions.value = null;
@@ -285,6 +287,8 @@ async function getProfit() {
     };
   } catch (e) {
     error.value = e.response?.data?.message || e.message;
+  } finally {
+    loading.value = false
   }
 }
 

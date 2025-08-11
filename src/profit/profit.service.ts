@@ -128,6 +128,16 @@ const sellY    = sellSnap?.price ?? this.roundToCents(sell.price);
   // 🧪 Log perf
   const duration = Date.now() - t0;
   console.log(`[PROFIT] Took ${duration}ms for range ${startTime} → ${endTime}`);
+  console.log('--- Profit Calculation Debug ---');
+  console.log('Buy Timestamp:', buy.timestamp);
+console.log('Buy Price:', buy.price);
+console.log('Sell Timestamp:', sell.timestamp);
+console.log('Sell Price:', sell.price);
+console.log('Investment (Funds):', F);
+console.log('Num Shares:', numShares.toString());
+console.log('Total Cost:', totalCost.toString());
+console.log('Profit:', profit.toString());
+
 
   return {
     buyTime:   buy.timestamp,
