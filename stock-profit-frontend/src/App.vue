@@ -116,7 +116,7 @@
 import { ref, onMounted, computed, watch, onUnmounted } from 'vue';
 import Highcharts from 'highcharts';
 import api from './services/api.js';
-import { getStatsReady } from './services/api.js';
+// import { getStatsReady } from './services/api.js';
 
 // Use local time instead of UTC
 Highcharts.setOptions({
@@ -148,28 +148,19 @@ function toLocalInputValue(isoString) {
 }
 
 onMounted(async () => {
-  // Wait for backend stats cache to be ready
-  while (true) {
-    try {
-      const ready = await getStatsReady();
-      if (ready) {
-        statsReady.value = true;
-        break;
-      }
-    } catch (e) {
-      console.error('Error checking stats:', e);
-    }
-    await new Promise(res => setTimeout(res, 1000)); // wait 1 sec
+  try {
+    // Directly fetch min/max via fast path; no polling
+    const res = await api.get('/profit/minmax');
+    minTime.value = res.data.min;
+    maxTime.value = res.data.max;
+    startTime.value = toLocalInputValue(res.data.min);
+    endTime.value = toLocalInputValue(res.data.max);
+    statsReady.value = true;
+  } catch (e) {
+    console.error('Failed to load min/max:', e);
+  } finally {
+    loadingStats.value = false;
   }
-
-  loadingStats.value = false;
-
-  // Now load min/max timestamps
-  const res = await api.get('/profit/minmax');
-  minTime.value = res.data.min;
-  maxTime.value = res.data.max;
-  startTime.value = toLocalInputValue(res.data.min);
-  endTime.value = toLocalInputValue(res.data.max);
 });
 
 onUnmounted(() => {

@@ -23,6 +23,19 @@ export class ProfitService {
     private readonly dataGenerator: DataGeneratorService,
   ) {}
 
+  // Cache best buy/sell pair per [start|end]. Result is independent of funds.
+  private bestPairCache: Map<string, { buy: PricePoint; sell: PricePoint }> = new Map();
+  private readonly bestPairCacheLimit = 200;
+
+  private setBestPairCache(key: string, value: { buy: PricePoint; sell: PricePoint }) {
+    if (this.bestPairCache.has(key)) this.bestPairCache.delete(key);
+    this.bestPairCache.set(key, value);
+    if (this.bestPairCache.size > this.bestPairCacheLimit) {
+      const oldestKey = this.bestPairCache.keys().next().value as string;
+      this.bestPairCache.delete(oldestKey);
+    }
+  }
+
   private sanitizeInput(value: any): any {
     if (typeof value === 'string') {
       return value.trim();
@@ -71,26 +84,46 @@ export class ProfitService {
   this.validateFunds(F);
   this.validateDateRange(sT, eT);
 
-  // ✅ Stream points to find best buy/sell
+  // ✅ Stream points to find best buy/sell (single pass) and build chart data buckets
+  const cacheKey = `${sT}|${eT}`;
+  let bestBuySell: { buy: PricePoint; sell: PricePoint } | null = this.bestPairCache.get(cacheKey) || null;
   let minPoint: PricePoint | null = null;
-  let bestBuySell: { buy: PricePoint; sell: PricePoint } | null = null;
   let bestProfit = 0;
 
-// src/profit/profit.service.ts
-const stream = this.pricesService.streamRange(sT, eT); // replace this:
+  const startMs = Date.parse(sT);
+  const endMs = Date.parse(eT);
+  const MAX_CHART_POINTS = 1000;
+  const spanMs = Math.max(1, endMs - startMs);
+  const bucketMs = Math.max(1, Math.floor(spanMs / MAX_CHART_POINTS));
+  const bucketFirst: Map<number, PricePoint> = new Map();
 
-  for await (const pt of stream) {
-    if (!minPoint || pt.price < minPoint.price) {
-      minPoint = pt;
-      continue;
+  if (!bestBuySell) {
+    for await (const pt of this.pricesService.streamRange(sT, eT)) {
+      // Chart bucket sampling: keep first point in each time bucket
+      const ts = Date.parse(pt.timestamp);
+      const bucketIndex = Math.floor((ts - startMs) / bucketMs);
+      if (!bucketFirst.has(bucketIndex)) bucketFirst.set(bucketIndex, pt);
+
+      if (!minPoint || pt.price < minPoint.price) {
+        minPoint = pt;
+        continue;
+      }
+
+      const shares = F / minPoint.price;
+      const profit = (pt.price - minPoint.price) * shares;
+
+      if (profit > bestProfit) {
+        bestProfit  = profit;
+        bestBuySell = { buy: minPoint, sell: pt };
+      }
     }
-
-    const shares = F / minPoint.price;
-    const profit = (pt.price - minPoint.price) * shares;
-
-    if (profit > bestProfit) {
-      bestProfit  = profit;
-      bestBuySell = { buy: minPoint, sell: pt };
+    if (bestBuySell) this.setBestPairCache(cacheKey, bestBuySell);
+  } else {
+    // Even if best pair is cached, still build chart buckets in one pass (cheap)
+    for await (const pt of this.pricesService.streamRange(sT, eT)) {
+      const ts = Date.parse(pt.timestamp);
+      const bucketIndex = Math.floor((ts - startMs) / bucketMs);
+      if (!bucketFirst.has(bucketIndex)) bucketFirst.set(bucketIndex, pt);
     }
   }
 
@@ -107,8 +140,10 @@ const stream = this.pricesService.streamRange(sT, eT); // replace this:
   const totalCost = numShares * buy.price;
   const profit    = (sell.price - buy.price) * numShares;
 
-  // ✅ Get sampled chart data
-  const chartData = await this.pricesService.getChartData(sT, eT);
+  // ✅ Build chart data from buckets
+  const chartData = Array.from(bucketFirst.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([, p]) => ({ timestamp: p.timestamp, price: p.price }));
 
   // ✅ Snap marker prices to chart for alignment
 function snapToNearest(ts: string): PricePoint | undefined {

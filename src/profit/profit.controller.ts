@@ -49,12 +49,9 @@ export class ProfitController {
   @Get('minmax')
   async getMinMax(): Promise<{ min: string; max: string }> {
     try {
-      // getStats() returns { dateRange: { start, end }, ... }
-      const stats = await this.pricesService.getStats();
-      return {
-        min: stats.dateRange.start,
-        max: stats.dateRange.end,
-      };
+      // Fast path: read only first and last entries from the data file
+      const quick = await this.pricesService.getMinMaxQuick();
+      return { min: quick.start, max: quick.end };
     } catch (error) {
       throw new HttpException(
         'Failed to retrieve time range',
