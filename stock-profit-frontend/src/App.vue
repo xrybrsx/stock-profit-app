@@ -37,24 +37,44 @@
     <div class="input-row">
       <div class="input-group">
         <label>Start Time</label>
-        <input type="datetime-local" v-model="startTime" :min="toLocalInputValue(minTime)" :max="toLocalInputValue(maxTime)" />
+        <input type="datetime-local" v-model="startTime" :min="toLocalInputValue(minTime)" :max="toLocalInputValue(maxTime)" :disabled="loading" />
       </div>
       <div class="input-group">
         <label>End Time</label>
-        <input type="datetime-local" v-model="endTime" :min="toLocalInputValue(minTime)" :max="toLocalInputValue(maxTime)" />
+        <input type="datetime-local" v-model="endTime" :min="toLocalInputValue(minTime)" :max="toLocalInputValue(maxTime)" :disabled="loading" />
       </div>
       <div class="input-group">
         <label>Investment Amount (USD)</label>
         <div class="currency-input">
           <span class="currency-symbol">$</span>
-          <input type="number" v-model.number="funds" placeholder="0.00" step="0.01" min="0" />
+          <input type="number" v-model.number="funds" placeholder="0.00" step="0.01" min="0" :disabled="loading" />
         </div>
       </div>
     </div>
 
     <button @click="getProfit" class="calc-button" :disabled="!canCalculate || !statsReady || loading">
-         {{ loading ? 'Calculating...' : ' Calculate Optimal Strategy' }}
+      <template v-if="loading">
+        <span class="spinner" aria-label="Loading">
+          <svg xmlns="http://www.w3.org/2000/svg" width="54" height="18" viewBox="0 0 120 30" fill="currentColor" role="img" aria-hidden="true">
+            <circle cx="15" cy="15" r="9">
+              <animate attributeName="cy" values="15;7;15" dur="0.8s" repeatCount="indefinite" />
+            </circle>
+            <circle cx="60" cy="15" r="9">
+              <animate attributeName="cy" values="15;7;15" dur="0.8s" begin="0.2s" repeatCount="indefinite" />
+            </circle>
+            <circle cx="105" cy="15" r="9">
+              <animate attributeName="cy" values="15;7;15" dur="0.8s" begin="0.4s" repeatCount="indefinite" />
+            </circle>
+          </svg>
+        </span>
+      </template>
+      <template v-else>
+        Calculate Optimal Strategy
+      </template>
     </button>
+    <transition name="fade-slide" mode="out-in">
+      <div v-if="loading" class="loading-subtext" :key="loadingMessage">{{ loadingMessage }}</div>
+    </transition>
 
     <div v-if="error" class="error-msg">{{ error }}</div>
 
@@ -151,6 +171,21 @@ let chartInstance = null;
 const statsReady = ref(false);
 const loadingStats = ref(true);
 const loading = ref(false)
+const loadingMessage = ref('Thinking…')
+const rotatingMessages = [
+  'This may take a while…',
+  'Thinking…',
+  'Scanning prices…',
+  'There are a lot of prices to scan…',
+  'There are more prices than I expected...',
+  'Please be patient…',
+  'Crunching numbers…',
+  'I promise I will get it done…',
+  'Almost there…',
+  'Please don\'t hate me...',
+  'I am working on it...',
+]
+let loadingMessageTimer = null
 
 function toLocalInputValue(isoString) {
   if (!isoString) return '';
@@ -182,12 +217,32 @@ onUnmounted(() => {
     chartInstance.destroy();
     chartInstance = null;
   }
+  if (loadingMessageTimer) {
+    clearInterval(loadingMessageTimer);
+    loadingMessageTimer = null;
+  }
 });
 
 const formattedMin = computed(() => new Date(minTime.value).toLocaleString());
 const formattedMax = computed(() => new Date(maxTime.value).toLocaleString());
 const shortTime    = ts => new Date(ts).toLocaleTimeString();
 const canCalculate = computed(() => startTime.value && endTime.value && funds.value > 0);
+
+watch(loading, (isLoading) => {
+  if (isLoading) {
+    let idx = 0
+    loadingMessage.value = rotatingMessages[idx % rotatingMessages.length]
+    loadingMessageTimer = setInterval(() => {
+      idx = (idx + 1) % rotatingMessages.length
+      loadingMessage.value = rotatingMessages[idx]
+    }, 2400)
+  } else {
+    if (loadingMessageTimer) {
+      clearInterval(loadingMessageTimer)
+      loadingMessageTimer = null
+    }
+  }
+})
 
 watch(chartOptions, (options) => {
   if (!options || !chartContainer.value) return;
@@ -377,6 +432,12 @@ function safeToFixed(val, digits = 2) {
   border: 1px solid #555;
   color: #eee;
 }
+.input-group input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: #555;
+  border-color: #777;
+}
 .currency-input {
   display: flex;
   align-items: center;
@@ -439,6 +500,25 @@ function safeToFixed(val, digits = 2) {
   cursor: not-allowed;
   background: #555;
   border-color: #777;
+}
+.spinner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #eee;
+}
+.fade-slide-enter-active, .fade-slide-leave-active {
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+.fade-slide-enter-from,
+.fade-slide-leave-to {
+  opacity: 0;
+  transform: translateY(6px);
+}
+.loading-subtext {
+  margin-top: 0.35rem;
+  color: #aaa;
+  font-size: 0.95rem;
 }
 .error-msg {
   color: #ff5555;
@@ -524,7 +604,7 @@ function safeToFixed(val, digits = 2) {
   text-align: center;
   font-size: 1.1rem;
   color: #aaa;
-  margin-top: 2rem;
+  margin-top: 4rem;
 }
 
 .explain {
