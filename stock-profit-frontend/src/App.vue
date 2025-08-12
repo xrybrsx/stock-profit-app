@@ -76,8 +76,20 @@
         </div>
         <div class="result-item">
           <div class="result-label">Profit</div>
-          <div class="result-value profit-positive">${{ safeToFixed(result?.profit, 2) }}</div>
+          <div class="result-value profit-positive">${{ safeToFixed(result?.profit, 2) }} ({{ result?.profitPercent?.toFixed(2) }}%)</div>
         </div>
+        <div class="info-icon" @mouseenter="showProfitInfo = true" @mouseleave="showProfitInfo = false">
+        <span>ⓘ</span>
+        <div v-show="showProfitInfo" class="info-tooltip">
+          <h3>How the profit was calculated</h3>
+          <p>
+            <ul>
+          <li><strong>Formula:</strong> {{ result?.explanation?.formula }}</li>
+          <li><strong>Points scanned:</strong> {{ result?.explanation?.pointsScanned }}</li>
+          </ul>
+          </p>
+        </div>
+      </div>
       </div>
     </div>
 
@@ -133,6 +145,7 @@ const chartOptions = ref(null);
 const error     = ref('');
 const chartContainer = ref(null);
 const showInfo = ref(false);
+const showProfitInfo = ref(false);
 const showCostInfo = ref(false);
 let chartInstance = null;
 const statsReady = ref(false);
@@ -249,7 +262,9 @@ async function getProfit() {
         data: dataSeries,
         name: 'Price',
         color: '#1B3C53',
-        marker: { enabled: false }
+        marker: { enabled: false },
+        pointStart: Date.parse(payload.startTime),
+        pointInterval: null
       }, {
         type: 'scatter',
         name: 'Buy/Sell',
@@ -510,6 +525,20 @@ function safeToFixed(val, digits = 2) {
   font-size: 1.1rem;
   color: #aaa;
   margin-top: 2rem;
+}
+
+.explain {
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  background: #2e2e2e;
+  border-left: 3px solid #4CAF50;
+  color: #ddd;
+  font-size: 0.9rem;
+}
+.explain-title {
+  font-weight: bold;
+  margin-bottom: 0.25rem;
+  color: #4CAF50;
 }
 
 </style>

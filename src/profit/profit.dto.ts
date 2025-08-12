@@ -1,4 +1,4 @@
-import { IsISO8601, IsPositive, Validate, ValidationArguments, ValidatorConstraint, ValidatorConstraintInterface } from 'class-validator';
+import { IsISO8601, Validate, ValidationArguments, ValidatorConstraint, ValidatorConstraintInterface } from 'class-validator';
 
 // validate the date range
 @ValidatorConstraint({ name: 'dateRange', async: false })
@@ -18,6 +18,20 @@ export class DateRangeValidator implements ValidatorConstraintInterface {
   }
 }
 
+@ValidatorConstraint({ name: 'moneyPrecision', async: false })
+export class MoneyPrecisionValidator implements ValidatorConstraintInterface {
+  validate(value: number) {
+    if (typeof value !== 'number' || !isFinite(value)) return false;
+    if (value < 0.01) return false; // minimum one cent
+    // allow up to 2 decimal places (0.1, 0.01 allowed; 0.001 rejected)
+    const cents = Math.round(value * 100);
+    return Math.abs(value * 100 - cents) < 1e-8;
+  }
+  defaultMessage(): string {
+    return 'Funds must be at least 0.01 and have at most two decimal places';
+  }
+}
+
 export class ProfitDto {
   @IsISO8601({}, { message: 'Start Time must be a valid ISO 8601 timestamp' })
   @Validate(DateRangeValidator)
@@ -26,6 +40,6 @@ export class ProfitDto {
   @IsISO8601({}, { message: 'End Time must be a valid ISO 8601 timestamp' })
   endTime!: string;
 
-  @IsPositive({ message: 'Funds must be a positive number' })
+  @Validate(MoneyPrecisionValidator)
   funds!: number;
 }

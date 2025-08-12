@@ -202,11 +202,13 @@ export class PricesService {
           const nl = text.indexOf('\n', start);
           if (nl === -1) break;
           const line = text.slice(start, nl);
-          const lineBytes = Buffer.byteLength(line, 'utf8') + 1; // include newline
+          const hasCR = line.endsWith('\r');
+          const lineTrimmed = hasCR ? line.slice(0, -1) : line;
+          const lineBytes = Buffer.byteLength(lineTrimmed, 'utf8') + (hasCR ? 2 : 1); // include CRLF or LF
           // Index every Nth line
           if (lineCount % this.INDEX_EVERY_N_LINES === 0) {
             try {
-              const parsed = JSON.parse(line);
+              const parsed = JSON.parse(lineTrimmed);
               const ts = Date.parse(parsed.timestamp);
               if (!isNaN(ts)) index.push({ ts, offset: lineStartOffset });
             } catch {
@@ -222,7 +224,8 @@ export class PricesService {
       // Index the final line if no trailing newline
       if (carry.length > 0) {
         try {
-          const ts = Date.parse(JSON.parse(carry).timestamp);
+          const finalLine = carry.endsWith('\r') ? carry.slice(0, -1) : carry;
+          const ts = Date.parse(JSON.parse(finalLine).timestamp);
           if (!isNaN(ts)) index.push({ ts, offset: lineStartOffset });
         } catch {}
       }
@@ -253,7 +256,14 @@ export class PricesService {
     const fileStream = fs.createReadStream(this.getDataFilePath(), { start: offset, highWaterMark: this.FILE_STREAM_CHUNK_BYTES });
     const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
     for await (const line of rl) {
-      if (line.trim()) yield JSON.parse(line);
+      const t = line.trim();
+      if (!t) continue;
+      try {
+        yield JSON.parse(t);
+      } catch {
+        // skip malformed first partial line if offset landed mid-line
+        continue;
+      }
     }
   }
 
@@ -314,14 +324,33 @@ export class PricesService {
 
 
   async *streamRange(start: string, end: string): AsyncGenerator<PricePoint> {
+    const startMs = Date.parse(start);
+    const endMs = Date.parse(end);
+    let yielded = false;
     // Build index lazily on first range scan to enable seeking
     if (!this.lineIndex) {
       try { await this.buildLineIndex(); } catch {}
     }
     const startOffset = this.findOffsetForTimestamp(start);
-    for await (const p of this.streamPointsFromOffset(startOffset)) {
-      if (p.timestamp >= start && p.timestamp <= end) yield p;
-      if (p.timestamp > end) break;
+    try {
+      for await (const p of this.streamPointsFromOffset(startOffset)) {
+        const ts = Date.parse(p.timestamp);
+        if (!isNaN(startMs) && ts < startMs) continue;
+        if (!isNaN(endMs) && ts > endMs) break;
+        yielded = true;
+        yield p;
+      }
+    } catch {
+      // ignore and fallback below
+    }
+    // Fallback: if nothing yielded (e.g., bad offset), stream from beginning
+    if (!yielded) {
+      for await (const p of this.streamPoints()) {
+        const ts = Date.parse(p.timestamp);
+        if (!isNaN(startMs) && ts < startMs) continue;
+        if (!isNaN(endMs) && ts > endMs) break;
+        yield p;
+      }
     }
   }
 

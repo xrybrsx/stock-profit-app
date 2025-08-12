@@ -14,6 +14,13 @@ export interface ProfitResult {
   totalCost: number;
   netProfit: number;
   chartData: { timestamp: string; price: number }[];
+  profitPercent: number;
+  explanation: {
+    // method: string;
+    // timeComplexity: string;
+    formula: string;
+    pointsScanned: number;
+  };
 }
 
 @Injectable()
@@ -22,6 +29,9 @@ export class ProfitService {
     private readonly pricesService: PricesService,
     private readonly dataGenerator: DataGeneratorService,
   ) {}
+
+  // Minimum meaningful profit to return a result (in dollars)
+  private readonly MIN_PROFIT_DOLLARS = 0.01;
 
   // Cache best buy/sell pair per [start|end]. Result is independent of funds.
   private bestPairCache: Map<string, { buy: PricePoint; sell: PricePoint }> = new Map();
@@ -89,6 +99,7 @@ export class ProfitService {
   let bestBuySell: { buy: PricePoint; sell: PricePoint } | null = this.bestPairCache.get(cacheKey) || null;
   let minPoint: PricePoint | null = null;
   let bestProfit = 0;
+  let pointsScanned = 0;
 
   const startMs = Date.parse(sT);
   const endMs = Date.parse(eT);
@@ -116,18 +127,12 @@ export class ProfitService {
         bestProfit  = profit;
         bestBuySell = { buy: minPoint, sell: pt };
       }
+      pointsScanned++;
     }
     if (bestBuySell) this.setBestPairCache(cacheKey, bestBuySell);
-  } else {
-    // Even if best pair is cached, still build chart buckets in one pass (cheap)
-    for await (const pt of this.pricesService.streamRange(sT, eT)) {
-      const ts = Date.parse(pt.timestamp);
-      const bucketIndex = Math.floor((ts - startMs) / bucketMs);
-      if (!bucketFirst.has(bucketIndex)) bucketFirst.set(bucketIndex, pt);
-    }
   }
 
-  if (!bestBuySell || bestProfit <= 0) {
+  if (!bestBuySell) {
     throw new BadRequestException('No profitable trade found in the given range');
   }
 
@@ -139,11 +144,18 @@ export class ProfitService {
   const numShares = F / buy.price;
   const totalCost = numShares * buy.price;
   const profit    = (sell.price - buy.price) * numShares;
+  // If profit is <= 0 or shares are effectively zero, treat as no-op
+  if (profit <= 0 || numShares < 0.0001) {
+    throw new BadRequestException('No profitable trade found in the given range');
+  }
+  // Enforce a minimum meaningful profit just like we enforce money precision on inputs
+  if (profit < this.MIN_PROFIT_DOLLARS) {
+    throw new BadRequestException('Profit below $0.01 — no meaningful trade found in the given range');
+  }
+  const profitPercent = Number(new Decimal(profit).div(totalCost).mul(100).toDecimalPlaces(2, Decimal.ROUND_HALF_UP));
 
-  // ✅ Build chart data from buckets
-  const chartData = Array.from(bucketFirst.entries())
-    .sort((a, b) => a[0] - b[0])
-    .map(([, p]) => ({ timestamp: p.timestamp, price: p.price }));
+  // ✅ Get full-range chart data (own streaming + cache handles performance)
+  const chartData = await this.pricesService.getChartData(sT, eT);
 
   // ✅ Snap marker prices to chart for alignment
 function snapToNearest(ts: string): PricePoint | undefined {
@@ -179,11 +191,18 @@ console.log('Profit:', profit.toString());
     sellTime:  sell.timestamp,
     buyPrice:  this.roundToCents(buyY),
     sellPrice: this.roundToCents(sellY),
-    numShares: this.roundToCents(numShares),
+    numShares: Number(new Decimal(numShares).toDecimalPlaces(4, Decimal.ROUND_HALF_UP)),
     profit:    this.roundToCents(profit),
     totalCost: this.roundToCents(totalCost),
     netProfit: this.roundToCents(profit),
     chartData,
+    profitPercent,
+    explanation: {
+      // method: 'Single-pass streaming scan keeping the running minimum and best buy→sell pair',
+      // timeComplexity: 'O(n) over the selected range',
+      formula: 'shares = funds / buyPrice \n profit = (sellPrice - buyPrice) * shares \n profit% = profit / totalCost * 100',
+      pointsScanned,
+    },
   };
 }
 }
