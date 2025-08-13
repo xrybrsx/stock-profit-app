@@ -15,5 +15,8 @@ RUN npm run build:backend   # <-- Only build backend, frontend is built separate
 RUN npm run copy:assets      # <-- Copy data assets to dist/data as expected by the service
 COPY --from=frontend-build /app/frontend/dist ./stock-profit-frontend/dist
 
+# Ensure production environment
+ENV NODE_ENV=production
+
 EXPOSE 3000
 CMD ["node", "dist/main.js"]

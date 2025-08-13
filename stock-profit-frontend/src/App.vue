@@ -184,6 +184,9 @@ const rotatingMessages = [
   'Almost there…',
   'Please don\'t hate me...',
   'I am working on it...',
+  'You can go and take a walk if you need to...',
+  'Still calculating...',
+  'This takes forever, doesn\'t it..',
 ]
 let loadingMessageTimer = null
 

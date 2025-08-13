@@ -9,11 +9,11 @@ services:
     env_file:
       - .env
     volumes:
-      -  ./src/data/3mo-prices.ndjson:/app/data/3mo-prices.ndjson # to include price file
+      -  ./src/data/3mo-prices.ndjson:/app/dist/data/3mo-prices.ndjson:ro # mount into dist/data for runtime
     environment:
       - NODE_ENV=production
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/profit/minmax"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
       retries: 3

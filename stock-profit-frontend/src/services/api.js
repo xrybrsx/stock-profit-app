@@ -20,15 +20,18 @@ if (typeof window !== 'undefined') {
 // Log which API base URL the frontend will use (useful inside container)
 // Do not expose secrets
 // eslint-disable-next-line no-console
-console.log('[FRONTEND] API base URL:', base);
+if (import.meta.env.DEV) {
+  // eslint-disable-next-line no-console
+  console.log('[FRONTEND] API base URL:', base);
+}
 
 // Point to your NestJS backend
+const defaultHeaders = { 'Content-Type': 'application/json' };
+// Do NOT attach API keys from the browser in production.
+// Leave header unset; use allow-listing on the server or server-to-server calls for sensitive APIs.
 const api = axios.create({
   baseURL: base,
-  headers: {
-    'Content-Type': 'application/json',
-    'X-API-Key': import.meta.env.VITE_API_KEY,
-  },
+  headers: defaultHeaders,
 });
 
 // Add response interceptor for error handling
@@ -45,23 +48,26 @@ api.interceptors.response.use(
 // Log outgoing requests (method + URL only) and basic responses
 api.interceptors.request.use((config) => {
   const redactedHeaders = { ...(config.headers || {}) };
-  if (redactedHeaders['X-API-Key']) {
-    redactedHeaders['X-API-Key'] = '***';
+  if (import.meta.env.DEV) {
+    // eslint-disable-next-line no-console
+    console.log('[FRONTEND] ->', config.method?.toUpperCase(), `${config.baseURL || ''}${config.url}`, 'headers:', redactedHeaders);
   }
-  // eslint-disable-next-line no-console
-  console.log('[FRONTEND] ->', config.method?.toUpperCase(), `${config.baseURL || ''}${config.url}`, 'headers:', redactedHeaders);
   return config;
 });
 api.interceptors.response.use(
   (res) => {
-    // eslint-disable-next-line no-console
-    console.log('[FRONTEND] <-', res.status, res.config.method?.toUpperCase(), `${res.config.baseURL || ''}${res.config.url}`);
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.log('[FRONTEND] <-', res.status, res.config.method?.toUpperCase(), `${res.config.baseURL || ''}${res.config.url}`);
+    }
     return res;
   },
   (err) => {
     const cfg = err.config || {};
-    // eslint-disable-next-line no-console
-    console.log('[FRONTEND] x ', err.response?.status || 'ERR', cfg.method?.toUpperCase(), `${cfg.baseURL || ''}${cfg.url}`);
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.log('[FRONTEND] x ', err.response?.status || 'ERR', cfg.method?.toUpperCase(), `${cfg.baseURL || ''}${cfg.url}`);
+    }
     return Promise.reject(err);
   }
 );

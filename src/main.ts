@@ -6,23 +6,26 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   // Configure CORS based on environment
-  const allowedOrigins = process.env.NODE_ENV === 'production' 
-    ? [process.env.FRONTEND_URL] // Production origins
-    : ['http://localhost:5173', 'http://localhost:3000']; // Development origins
+  const prodOrigins = process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : undefined;
+  const allowedOrigins = process.env.NODE_ENV === 'production'
+    ? (prodOrigins || false) // if FRONTEND_URL not set, disallow cross-origin (same-origin only)
+    : ['http://localhost:5173', 'http://localhost:3000'];
 
   app.enableCors({
-    origin: allowedOrigins,
+    origin: allowedOrigins as any,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-API-Key'],
   });
 
-  // Basic startup/environment logs
-  console.log('[BOOT] Starting backend service');
-  console.log('[BOOT] NODE_ENV:', process.env.NODE_ENV || 'development');
-  console.log('[BOOT] Allowed CORS origins:', allowedOrigins);
-  if (process.env.FRONTEND_URL) {
-    console.log('[BOOT] FRONTEND_URL set to:', process.env.FRONTEND_URL);
+  // Basic startup/environment logs (silenced in production)
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('[BOOT] Starting backend service');
+    console.log('[BOOT] NODE_ENV:', process.env.NODE_ENV || 'development');
+    console.log('[BOOT] Allowed CORS origins:', allowedOrigins);
+    if (process.env.FRONTEND_URL) {
+      console.log('[BOOT] FRONTEND_URL set to:', process.env.FRONTEND_URL);
+    }
   }
 
   // Global validation pipe with proper error handling
@@ -47,26 +50,28 @@ async function bootstrap() {
   const expressApp: any = app.getHttpAdapter().getInstance();
   expressApp.disable('etag');
   
-  // Simple request logging for API routes
-  app.use((req: any, res: any, next: any) => {
-    const start = Date.now();
-    const { method } = req;
-    const url = req.originalUrl || req.url;
-    if (url && url.startsWith('/api')) {
-      const ip = req.headers['x-forwarded-for'] || req.ip || req.connection?.remoteAddress;
-      const host = req.headers.host;
-      const origin = req.headers.origin;
-      const referer = req.headers.referer;
-      const userAgent = req.headers['user-agent'];
-      res.on('finish', () => {
-        const ms = Date.now() - start;
-        console.log(
-          `[API] ${method} ${url} -> ${res.statusCode} ${ms}ms | ip=${ip} host=${host} origin=${origin} referer=${referer} ua=${userAgent}`
-        );
-      });
-    }
-    next();
-  });
+  // Simple request logging for API routes (silenced in production)
+  if (process.env.NODE_ENV !== 'production') {
+    app.use((req: any, res: any, next: any) => {
+      const start = Date.now();
+      const { method } = req;
+      const url = req.originalUrl || req.url;
+      if (url && url.startsWith('/api')) {
+        const ip = req.headers['x-forwarded-for'] || req.ip || req.connection?.remoteAddress;
+        const host = req.headers.host;
+        const origin = req.headers.origin;
+        const referer = req.headers.referer;
+        const userAgent = req.headers['user-agent'];
+        res.on('finish', () => {
+          const ms = Date.now() - start;
+          console.log(
+            `[API] ${method} ${url} -> ${res.statusCode} ${ms}ms | ip=${ip} host=${host} origin=${origin} referer=${referer} ua=${userAgent}`
+          );
+        });
+      }
+      next();
+    });
+  }
   app.use((req: any, res: any, next: any) => {
     if (req.originalUrl && req.originalUrl.startsWith('/api')) {
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
@@ -76,11 +81,13 @@ async function bootstrap() {
     next();
   });
 
-  // Use the Azure-provided PORT or default to 3000 locally
-  const portString = process.env.PORT || '3000';
+  // Use Azure's PORT or WEBSITES_PORT, fallback to 3000 locally
+  const portString = process.env.PORT || process.env.WEBSITES_PORT || '3000';
   const port       = parseInt(portString, 10);
   
   await app.listen(port, '0.0.0.0');
-  console.log(`[BOOT] Application is listening on port ${port}`);
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[BOOT] Application is listening on port ${port}`);
+  }
 }
 bootstrap();

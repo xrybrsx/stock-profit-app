@@ -172,18 +172,20 @@ const sellSnap = snapToNearest(sell.timestamp);
 const buyY     = buySnap?.price ?? this.roundToCents(buy.price);
 const sellY    = sellSnap?.price ?? this.roundToCents(sell.price);
 
-  // 🧪 Log perf
+  // Log perf in non-production only
   const duration = Date.now() - t0;
-  console.log(`[PROFIT] Took ${duration}ms for range ${startTime} → ${endTime}`);
-  console.log('--- Profit Calculation Debug ---');
-  console.log('Buy Timestamp:', buy.timestamp);
-console.log('Buy Price:', buy.price);
-console.log('Sell Timestamp:', sell.timestamp);
-console.log('Sell Price:', sell.price);
-console.log('Investment (Funds):', F);
-console.log('Num Shares:', numShares.toString());
-console.log('Total Cost:', totalCost.toString());
-console.log('Profit:', profit.toString());
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[PROFIT] Took ${duration}ms for range ${startTime} → ${endTime}`);
+    console.log('--- Profit Calculation Debug ---');
+    console.log('Buy Timestamp:', buy.timestamp);
+    console.log('Buy Price:', buy.price);
+    console.log('Sell Timestamp:', sell.timestamp);
+    console.log('Sell Price:', sell.price);
+    console.log('Investment (Funds):', F);
+    console.log('Num Shares:', numShares.toString());
+    console.log('Total Cost:', totalCost.toString());
+    console.log('Profit:', profit.toString());
+  }
 
 
   return {

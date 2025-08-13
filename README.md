@@ -29,9 +29,9 @@ The application uses a script to genearte simulated stock price data:
 
 # Security
 
-- **API Key Guard**: Uses a simple API key guard on all /api/profit endpoints, which checks for a matching X-API-Key header. It provides basic protection against automated or bot requests but should not be considered a substitute for full authentication or authorization. 
-- **CORS**: Only allows requests from trusted origins 
-- **Security Middleware**: Sets HTTP headers such as Content-Security-Policy (CSP), HSTS, X-Frame-Options, XSS protection, and CSRF mitigation.
+- **API Key Guard**: Uses a simple API key guard on all `/api/profit` endpoints, which checks for a matching `X-API-Key` header. If `API_KEY` is not set on the server, requests are allowed only when `NODE_ENV !== 'production'`.
+- **CORS**: In production, cross-origin is blocked unless `FRONTEND_URL` is set (then only that origin is allowed). In development, `http://localhost:5173` is allowed.
+- **Security Middleware**: Sets HTTP headers including a conservative CSP compatible with Highcharts, HSTS, X-Frame-Options and Referrer-Policy.
 
 # Testing
 
@@ -54,13 +54,16 @@ cd stock-profit-frontend && npm install && cd ..
 
 # Set environment variables
 echo API_KEY=your-own-key > .env
-cd stock-profit-frontend
-echo VITE_API_KEY=your-own-key > .env
-cd..
 
 # Run the app
 npm run build
 npm start
+## Environment Variables
+
+- `API_KEY`: Optional in dev, required in production to protect `/api/*` endpoints.
+- `FRONTEND_URL`: Optional. When set in production, only this origin is allowed via CORS.
+- `PRICES_FILE`: Optional absolute/relative path to NDJSON data file. If unset, the app looks under `dist/data/3mo-prices.ndjson` or `src/data/3mo-prices.ndjson`.
+
 ```
 
 ## API Documentation

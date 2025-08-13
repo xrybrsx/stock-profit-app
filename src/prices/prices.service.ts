@@ -48,8 +48,8 @@ export class PricesService {
   private readonly INDEX_EVERY_N_LINES = 1000; // adjust for size/perf
 
   async onModuleInit() {
-  this.warmUpStats(); // don't await — run in background
-}
+    this.warmUpStats(); // don't await — run in background
+  }
 
   private statsCache: {
   totalPoints: number;
@@ -67,6 +67,10 @@ export class PricesService {
       path.resolve(process.cwd(), 'data/3mo-prices.ndjson'),
       path.resolve(process.cwd(), 'dist/data/3mo-prices.ndjson'),
       path.resolve(process.cwd(), 'src/data/3mo-prices.ndjson'),
+      // Fallbacks to JSON array file if NDJSON is unavailable
+      path.resolve(process.cwd(), 'data/24h-prices.json'),
+      path.resolve(process.cwd(), 'dist/data/24h-prices.json'),
+      path.resolve(process.cwd(), 'src/data/24h-prices.json'),
     ].filter(Boolean) as string[];
     for (const p of candidates) {
       try {
@@ -76,9 +80,40 @@ export class PricesService {
     return this.filePath;
   }
 
+  private async isJsonArrayFile(filePath: string): Promise<boolean> {
+    try {
+      const fh = await fsp.open(filePath, 'r');
+      try {
+        const buf = Buffer.alloc(1 << 12);
+        const { bytesRead } = await fh.read(buf, 0, buf.length, 0);
+        const text = buf.subarray(0, bytesRead).toString('utf8');
+        const firstNonWs = text.match(/\S/);
+        return firstNonWs ? firstNonWs[0] === '[' : false;
+      } finally {
+        await fh.close();
+      }
+    } catch {
+      return false;
+    }
+  }
+
   private async readFirstLineTimestamp(): Promise<string | null> {
+    const filePath = this.getDataFilePath();
+    if (await this.isJsonArrayFile(filePath)) {
+      // JSON array mode
+      try {
+        const content = await fsp.readFile(filePath, 'utf8');
+        const arr = JSON.parse(content);
+        if (Array.isArray(arr) && arr.length > 0) {
+          return arr[0]?.timestamp || null;
+        }
+        return null;
+      } catch (e) {
+        throw e;
+      }
+    }
     return new Promise((resolve, reject) => {
-      const stream = fs.createReadStream(this.getDataFilePath(), { encoding: 'utf8' });
+      const stream = fs.createReadStream(filePath, { encoding: 'utf8' });
       let acc = '';
       stream.on('data', (chunk: string) => {
         acc += chunk;
@@ -110,7 +145,21 @@ export class PricesService {
   }
 
   private async readLastLineTimestamp(): Promise<string | null> {
-    const fh = await fsp.open(this.getDataFilePath(), 'r');
+    const filePath = this.getDataFilePath();
+    if (await this.isJsonArrayFile(filePath)) {
+      try {
+        const content = await fsp.readFile(filePath, 'utf8');
+        const arr = JSON.parse(content);
+        if (Array.isArray(arr) && arr.length > 0) {
+          const last = arr[arr.length - 1];
+          return last?.timestamp || null;
+        }
+        return null;
+      } catch (e) {
+        throw e;
+      }
+    }
+    const fh = await fsp.open(filePath, 'r');
     try {
       const stat = await fh.stat();
       if (stat.size === 0) return null;
@@ -162,16 +211,34 @@ export class PricesService {
     return this.dateRangeQuickCache;
   }
   private async warmUpStats() {
-  try {
-    this.statsCache = await this.getStatsFromStream();
-    console.log('✅ Stats cache ready');
-  } catch (err) {
-    console.error('❌ Failed to preload stats:', err);
+    try {
+      this.statsCache = await this.getStatsFromStream();
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('✅ Stats cache ready');
+      }
+    } catch (err) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('❌ Failed to preload stats:', err);
+      }
+    }
   }
-}
 
   private async *streamPoints(): AsyncGenerator<PricePoint> {
-    const fileStream = fs.createReadStream(this.getDataFilePath(), { highWaterMark: this.FILE_STREAM_CHUNK_BYTES });
+    const filePath = this.getDataFilePath();
+    if (await this.isJsonArrayFile(filePath)) {
+      // Fallback: parse array in memory (sufficient for dev/test)
+      const content = await fsp.readFile(filePath, 'utf8');
+      const arr = JSON.parse(content);
+      if (Array.isArray(arr)) {
+        for (const item of arr) {
+          if (item && typeof item === 'object') {
+            yield item as PricePoint;
+          }
+        }
+      }
+      return;
+    }
+    const fileStream = fs.createReadStream(filePath, { highWaterMark: this.FILE_STREAM_CHUNK_BYTES });
     const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
 
     for await (const line of rl) {
@@ -182,6 +249,11 @@ export class PricesService {
   private async buildLineIndex(): Promise<void> {
     if (this.lineIndex) return;
     const filePath = this.getDataFilePath();
+    if (await this.isJsonArrayFile(filePath)) {
+      // Do not build index for array mode; not used
+      this.lineIndex = [];
+      return;
+    }
     const fd = await fsp.open(filePath, 'r');
     try {
       const CHUNK = 64 * 1024;

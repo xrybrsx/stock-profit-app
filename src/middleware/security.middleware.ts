@@ -9,10 +9,11 @@ export class SecurityMiddleware implements NestMiddleware {
     // Security headers
     res.setHeader('X-Content-Type-Options', 'nosniff'); // prevent MIME type sniffing
     res.setHeader('X-Frame-Options', 'DENY'); // prevent clickjacking
-    res.setHeader('X-XSS-Protection', '1; mode=block'); // prevent XSS attacks
-    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains'); // prevent HTTP to HTTPS redirect
-    // Explicitly allow only same-origin network calls; adjust if you truly need cross-origin
-    res.setHeader('Content-Security-Policy', "default-src 'self'; connect-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'");
+    // X-XSS-Protection is obsolete in modern browsers, omit to avoid header noise
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains'); // HSTS
+    // Explicitly allow only same-origin network calls; Highcharts requires inline styles and scripts
+    // If you host assets from a CDN, extend the sources accordingly.
+    res.setHeader('Content-Security-Policy', "default-src 'self'; connect-src 'self'; img-src 'self' data:; font-src 'self' data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'");
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin'); // prevent referrer leakage
     
     // Remove server information
