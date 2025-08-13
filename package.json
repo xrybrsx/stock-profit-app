@@ -7,6 +7,8 @@
   "license": "UNLICENSED",
   "scripts": {
     "prebuild": "rimraf dist public",
+    "generate:data": "ts-node -r tsconfig-paths/register src/scripts/generate-prices.ts",
+    "build:with-data": "npm run generate:data && npm run build",
     "build:frontend": "cd stock-profit-frontend && npm install && npm run build",
     "build:backend": "nest build",
     "build": "npm run build:frontend && npm run build:backend && npm run copy:assets",

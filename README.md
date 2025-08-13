@@ -22,16 +22,18 @@ The application includes:
 
 ## Sample Data
 
-The application uses a script to genearte simulated stock price data:
-- **Time Range**: 24-hour time window
-- **Data Points**: 86,400 price points (one per second)
-- **Price Range**: Realistic fluctuations with random walk algorithm
+The application uses a script to generate simulated stock price data:
+- **Time Range**: 3-month window (2025-01-01 to 2025-04-01)
+- **Data Format**: NDJSON stream (`3mo-prices.ndjson`), suitable for large datasets
+- **Data Volume**: Large (potentially multi-million points depending on granularity)
+- **Price Range**: Realistic fluctuations with a random walk algorithm
 
 # Security
 
-- **API Key Guard**: Uses a simple API key guard on all `/api/profit` endpoints, which checks for a matching `X-API-Key` header. If `API_KEY` is not set on the server, requests are allowed only when `NODE_ENV !== 'production'`.
-- **CORS**: In production, cross-origin is blocked unless `FRONTEND_URL` is set (then only that origin is allowed). In development, `http://localhost:5173` is allowed.
-- **Security Middleware**: Sets HTTP headers including a conservative CSP compatible with Highcharts, HSTS, X-Frame-Options and Referrer-Policy.
+- **API Key Guard (optional)**: If `API_KEY` is set on the server, cross-origin callers must send `X-API-Key`. Same-origin browser requests do not need a key. If `API_KEY` is not set, no key is required and protection relies on strict CORS and rate limiting.
+- **CORS**: In production, only the origin in `FRONTEND_URL` is allowed. If `FRONTEND_URL` is not set, cross-origin requests are blocked (same-origin only). In development, `http://localhost:5173` is allowed.
+- **Rate limiting**: Global rate limiting is enabled (10 requests per 60 seconds per IP).
+- **Security Middleware**: Sends strict headers including a conservative Content-Security-Policy (compatible with Highcharts), HSTS, X-Frame-Options, and Referrer-Policy.
 
 # Testing
 
@@ -52,23 +54,90 @@ cd stock-profit-app
 npm install
 cd stock-profit-frontend && npm install && cd ..
 
-# Set environment variables
+# Optional: set environment variables for the backend
 echo API_KEY=your-own-key > .env
 
 # Run the app
 npm run build
 npm start
-## Environment Variables
-
-- `API_KEY`: Optional in dev, required in production to protect `/api/*` endpoints.
-- `FRONTEND_URL`: Optional. When set in production, only this origin is allowed via CORS.
-- `PRICES_FILE`: Optional absolute/relative path to NDJSON data file. If unset, the app looks under `dist/data/3mo-prices.ndjson` or `src/data/3mo-prices.ndjson`.
 
 ```
+
+### Generate local data (3-month NDJSON)
+
+You can generate a fresh 3-month dataset locally before building:
+
+```bash
+# From the project root
+npm run generate:data
+
+# Or build and generate in one step
+npm run build:with-data
+```
+
+The generated file will be placed under `dist/data/3mo-prices.ndjson` and used by the backend.
+
+## Environment Variables
+
+- `API_KEY`: Optional. When set, cross-origin clients must include `X-API-Key`. Same-origin browser requests never require it.
+- `FRONTEND_URL`: Optional in production. When set, only this origin is allowed via CORS. If unset, cross-origin is blocked.
+- `PRICES_FILE`: Optional path to an NDJSON (preferred) or JSON array file with price points. Defaults to `dist/data/3mo-prices.ndjson`, with fallbacks under `data/` and `src/data/` and to `24h-prices.json` if present.
+
+## Run with Docker
+
+### Option 1: Docker Compose (local build)
+
+```bash
+# From the project root
+docker compose up --build -d
+```
+
+- App will be available at `http://localhost:3000`
+- Health check: `http://localhost:3000/health`
+- The compose file maps port 3000 and can mount a local data file into `dist/data/3mo-prices.ndjson`.
+
+### Option 2: Prebuilt image
+
+```bash
+docker run -d \
+  --name stock-profit-app \
+  -p 3000:3000 \
+  -e NODE_ENV=production \
+  rayabakarska/stock-profit-app:latest
+```
+
+Image is published on Docker Hub: [rayabakarska/stock-profit-app](https://hub.docker.com/r/rayabakarska/stock-profit-app)
+
+Optional flags:
+
+```bash
+# Allow only a specific frontend origin (recommended in production)
+-e FRONTEND_URL=http://localhost:3000
+
+# Protect cross-origin API calls with a simple API key
+-e API_KEY=your-own-key
+
+# Use an external price file (NDJSON). Adjust the path for your OS/shell.
+-v ${PWD}/src/data/3mo-prices.ndjson:/app/dist/data/3mo-prices.ndjson:ro
+```
+
+Note: Ensure you publish to port 3000 on the host (e.g., `-p 3000:3000`).
 
 ## API Documentation
 
 ### Endpoints
+#### GET `/health`
+Simple liveness/readiness endpoint.
+
+Response:
+```json
+{
+  "status": "ok",
+  "uptimeSeconds": 123,
+  "statsReady": true
+}
+```
+
 
 #### GET `/api/profit/minmax`
 Returns the available date range for calculations.
@@ -76,8 +145,8 @@ Returns the available date range for calculations.
 **Response:**
 ```json
 {
-  "min": "2025-01-01T10:00:00.000Z",
-  "max": "2025-01-01T11:00:00.000Z"
+  "min": "2025-01-01T00:00:00.000Z",
+  "max": "2025-04-01T00:00:00.000Z"
 }
 ```
 
@@ -87,8 +156,8 @@ Calculates the optimal buy/sell strategy.
 **Request:**
 ```json
 {
-  "startTime": "2025-01-01T10:00:00.000Z",
-  "endTime": "2025-01-01T10:30:00.000Z",
+  "startTime": "2025-01-15T10:00:00.000Z",
+  "endTime": "2025-02-15T10:30:00.000Z",
   "funds": 10000
 }
 ```
