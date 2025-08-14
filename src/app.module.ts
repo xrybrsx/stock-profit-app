@@ -1,9 +1,15 @@
-import { Module, NestModule, MiddlewareConsumer, RequestMethod } from '@nestjs/common';
+import {
+  Module,
+  NestModule,
+  MiddlewareConsumer,
+  RequestMethod,
+} from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { join } from 'path';
 import * as express from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { PricesModule } from './prices/prices.module';
 import { ProfitController } from './profit/profit.controller';
 import { ProfitService } from './profit/profit.service';
@@ -50,7 +56,7 @@ export class AppModule implements NestModule {
 
     // Apply SPA routing middleware (mute logs in production)
     consumer
-      .apply((req, res, next) => {
+      .apply((req: Request, res: Response, next: NextFunction) => {
         const url = req.originalUrl;
 
         if (url.startsWith('/api') || url.startsWith('/health')) {

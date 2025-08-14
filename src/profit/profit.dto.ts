@@ -1,4 +1,10 @@
-import { IsISO8601, Validate, ValidationArguments, ValidatorConstraint, ValidatorConstraintInterface } from 'class-validator';
+import {
+  IsISO8601,
+  Validate,
+  ValidationArguments,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
+} from 'class-validator';
 
 // validate the date range
 @ValidatorConstraint({ name: 'dateRange', async: false })
@@ -6,14 +12,14 @@ export class DateRangeValidator implements ValidatorConstraintInterface {
   validate(startTime: string, args: ValidationArguments) {
     const endTime = (args.object as any).endTime;
     if (!startTime || !endTime) return true; // Let other validators handle missing values
-    
+
     const start = new Date(startTime);
     const end = new Date(endTime);
-    
+
     return start < end;
   }
 
-  defaultMessage(args: ValidationArguments) {
+  defaultMessage(): string {
     return 'Start Time must be before End Time';
   }
 }
