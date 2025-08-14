@@ -36,7 +36,10 @@ export interface PricePoint {
 
 @Injectable()
 export class PricesService {
-  private readonly filePath = path.resolve(process.cwd(), 'dist/data/3mo-prices.ndjson');
+  private readonly filePath = path.resolve(
+    process.cwd(),
+    'dist/data/3mo-prices.ndjson',
+  );
   private readonly MAX_CHART_POINTS = 1000;
   private readonly FILE_STREAM_CHUNK_BYTES = 1 << 20; // 1MB chunks for faster reads
 
@@ -52,10 +55,10 @@ export class PricesService {
   }
 
   private statsCache: {
-  totalPoints: number;
-  dateRange: { start: string; end: string };
-  priceRange: { min: number; max: number };
-} | null = null;
+    totalPoints: number;
+    dateRange: { start: string; end: string };
+    priceRange: { min: number; max: number };
+  } | null = null;
 
   // Quick cache just for date range derived from first/last lines
   private dateRangeQuickCache: { start: string; end: string } | null = null;
@@ -63,7 +66,9 @@ export class PricesService {
   // Resolve data file path across environments (env override, local data/, dist/data/, src/data/)
   private getDataFilePath(): string {
     const candidates = [
-      process.env.PRICES_FILE ? path.resolve(process.cwd(), process.env.PRICES_FILE) : null,
+      process.env.PRICES_FILE
+        ? path.resolve(process.cwd(), process.env.PRICES_FILE)
+        : null,
       path.resolve(process.cwd(), 'data/3mo-prices.ndjson'),
       path.resolve(process.cwd(), 'dist/data/3mo-prices.ndjson'),
       path.resolve(process.cwd(), 'src/data/3mo-prices.ndjson'),
@@ -103,9 +108,9 @@ export class PricesService {
       // JSON array mode
       try {
         const content = await fsp.readFile(filePath, 'utf8');
-        const arr = JSON.parse(content);
+        const arr = JSON.parse(content) as Array<{ timestamp?: string }>;
         if (Array.isArray(arr) && arr.length > 0) {
-          return arr[0]?.timestamp || null;
+          return arr[0]?.timestamp ?? null;
         }
         return null;
       } catch (e) {
@@ -123,10 +128,10 @@ export class PricesService {
           stream.close();
           if (!line) return resolve(null);
           try {
-            const parsed = JSON.parse(line);
-            resolve(parsed.timestamp || null);
+            const parsed = JSON.parse(line) as { timestamp?: string };
+            resolve(parsed.timestamp ?? null);
           } catch (e) {
-            reject(e);
+            reject(new Error(String(e)));
           }
         }
       });
@@ -134,10 +139,10 @@ export class PricesService {
         const line = acc.trim();
         if (!line) return resolve(null);
         try {
-          const parsed = JSON.parse(line);
-          resolve(parsed.timestamp || null);
+          const parsed = JSON.parse(line) as { timestamp?: string };
+          resolve(parsed.timestamp ?? null);
         } catch (e) {
-          reject(e);
+          reject(new Error(String(e)));
         }
       });
       stream.on('error', reject);
@@ -149,10 +154,10 @@ export class PricesService {
     if (await this.isJsonArrayFile(filePath)) {
       try {
         const content = await fsp.readFile(filePath, 'utf8');
-        const arr = JSON.parse(content);
+        const arr = JSON.parse(content) as Array<{ timestamp?: string }>;
         if (Array.isArray(arr) && arr.length > 0) {
           const last = arr[arr.length - 1];
-          return last?.timestamp || null;
+          return last?.timestamp ?? null;
         }
         return null;
       } catch (e) {
@@ -173,8 +178,8 @@ export class PricesService {
         const candidate = lines[i].trim();
         if (!candidate) continue;
         try {
-          const parsed = JSON.parse(candidate);
-          return parsed.timestamp || null;
+          const parsed = JSON.parse(candidate) as { timestamp?: string };
+          return parsed.timestamp ?? null;
         } catch {
           if (start > 0) {
             const newSize = Math.min(stat.size, chunkSize * 2);
@@ -187,8 +192,8 @@ export class PricesService {
               const cand2 = newLines[j].trim();
               if (!cand2) continue;
               try {
-                const parsed2 = JSON.parse(cand2);
-                return parsed2.timestamp || null;
+                const parsed2 = JSON.parse(cand2) as { timestamp?: string };
+                return parsed2.timestamp ?? null;
               } catch {}
             }
           }
@@ -238,8 +243,13 @@ export class PricesService {
       }
       return;
     }
-    const fileStream = fs.createReadStream(filePath, { highWaterMark: this.FILE_STREAM_CHUNK_BYTES });
-    const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
+    const fileStream = fs.createReadStream(filePath, {
+      highWaterMark: this.FILE_STREAM_CHUNK_BYTES,
+    });
+    const rl = readline.createInterface({
+      input: fileStream,
+      crlfDelay: Infinity,
+    });
 
     for await (const line of rl) {
       if (line.trim()) yield JSON.parse(line);
@@ -276,7 +286,8 @@ export class PricesService {
           const line = text.slice(start, nl);
           const hasCR = line.endsWith('\r');
           const lineTrimmed = hasCR ? line.slice(0, -1) : line;
-          const lineBytes = Buffer.byteLength(lineTrimmed, 'utf8') + (hasCR ? 2 : 1); // include CRLF or LF
+          const lineBytes =
+            Buffer.byteLength(lineTrimmed, 'utf8') + (hasCR ? 2 : 1); // include CRLF or LF
           // Index every Nth line
           if (lineCount % this.INDEX_EVERY_N_LINES === 0) {
             try {
@@ -309,8 +320,11 @@ export class PricesService {
 
   private findOffsetForTimestamp(targetIso: string): number {
     const target = Date.parse(targetIso);
-    if (!this.lineIndex || this.lineIndex.length === 0 || isNaN(target)) return 0;
-    let lo = 0, hi = this.lineIndex.length - 1, best = 0;
+    if (!this.lineIndex || this.lineIndex.length === 0 || isNaN(target))
+      return 0;
+    let lo = 0,
+      hi = this.lineIndex.length - 1,
+      best = 0;
     while (lo <= hi) {
       const mid = (lo + hi) >> 1;
       const { ts, offset } = this.lineIndex[mid];
@@ -324,9 +338,17 @@ export class PricesService {
     return best;
   }
 
-  private async *streamPointsFromOffset(offset: number): AsyncGenerator<PricePoint> {
-    const fileStream = fs.createReadStream(this.getDataFilePath(), { start: offset, highWaterMark: this.FILE_STREAM_CHUNK_BYTES });
-    const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
+  private async *streamPointsFromOffset(
+    offset: number,
+  ): AsyncGenerator<PricePoint> {
+    const fileStream = fs.createReadStream(this.getDataFilePath(), {
+      start: offset,
+      highWaterMark: this.FILE_STREAM_CHUNK_BYTES,
+    });
+    const rl = readline.createInterface({
+      input: fileStream,
+      crlfDelay: Infinity,
+    });
     for await (const line of rl) {
       const t = line.trim();
       if (!t) continue;
@@ -338,8 +360,6 @@ export class PricesService {
       }
     }
   }
-
-  
 
   async getMinTimestamp(): Promise<string> {
     for await (const point of this.streamPoints()) {
@@ -394,14 +414,15 @@ export class PricesService {
     return result;
   }
 
-
   async *streamRange(start: string, end: string): AsyncGenerator<PricePoint> {
     const startMs = Date.parse(start);
     const endMs = Date.parse(end);
     let yielded = false;
     // Build index lazily on first range scan to enable seeking
     if (!this.lineIndex) {
-      try { await this.buildLineIndex(); } catch {}
+      try {
+        await this.buildLineIndex();
+      } catch {}
     }
     const startOffset = this.findOffsetForTimestamp(start);
     try {
@@ -426,49 +447,48 @@ export class PricesService {
     }
   }
 
- async getStatsFromStream(): Promise<{
-  totalPoints: number;
-  dateRange: { start: string; end: string };
-  priceRange: { min: number; max: number };
-}> {
-  let totalPoints = 0;
-  let start = '';
-  let end = '';
-  let minPrice = Infinity;
-  let maxPrice = -Infinity;
+  async getStatsFromStream(): Promise<{
+    totalPoints: number;
+    dateRange: { start: string; end: string };
+    priceRange: { min: number; max: number };
+  }> {
+    let totalPoints = 0;
+    let start = '';
+    let end = '';
+    let minPrice = Infinity;
+    let maxPrice = -Infinity;
 
-  for await (const point of this.streamPoints()) {
-    totalPoints++;
-    if (!start) start = point.timestamp;
-    end = point.timestamp;
-    if (point.price < minPrice) minPrice = point.price;
-    if (point.price > maxPrice) maxPrice = point.price;
-  }
+    for await (const point of this.streamPoints()) {
+      totalPoints++;
+      if (!start) start = point.timestamp;
+      end = point.timestamp;
+      if (point.price < minPrice) minPrice = point.price;
+      if (point.price > maxPrice) maxPrice = point.price;
+    }
 
-  if (totalPoints === 0) {
-    throw new Error('No data found for stats');
-  }
+    if (totalPoints === 0) {
+      throw new Error('No data found for stats');
+    }
 
-  return {
-    totalPoints,
-    dateRange: { start, end },
-    priceRange: { min: minPrice, max: maxPrice },
-  };
+    return {
+      totalPoints,
+      dateRange: { start, end },
+      priceRange: { min: minPrice, max: maxPrice },
+    };
   }
 
   public isStatsReady(): boolean {
-  return this.statsCache !== null;
-}
+    return this.statsCache !== null;
+  }
 
   public getStats(): {
-  totalPoints: number;
-  dateRange: { start: string; end: string };
-  priceRange: { min: number; max: number };
-} {
-  if (!this.statsCache) {
-    throw new Error('Stats not ready yet');
+    totalPoints: number;
+    dateRange: { start: string; end: string };
+    priceRange: { min: number; max: number };
+  } {
+    if (!this.statsCache) {
+      throw new Error('Stats not ready yet');
+    }
+    return this.statsCache;
   }
-  return this.statsCache;
-}
-  
 }

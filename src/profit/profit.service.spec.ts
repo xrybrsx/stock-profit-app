@@ -2,7 +2,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ProfitService } from './profit.service';
 import { PricesService } from '../prices/prices.service';
-import { DataGeneratorService, PricePoint } from './data-generator.service';
+import type { PricePoint } from './data-generator.service';
 
 describe('ProfitService', () => {
   let service: ProfitService;
@@ -13,12 +13,6 @@ describe('ProfitService', () => {
     { timestamp: '2024-01-01T10:00:00Z', price: 120 },
   ];
 
-  const dataGeneratorMock = {
-    generatePriceStream: jest.fn().mockImplementation(async function* () {
-      for (const p of pts) yield p;
-    }),
-  };
-
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -26,13 +20,14 @@ describe('ProfitService', () => {
         {
           provide: PricesService,
           useValue: {
-            // only getChartData is used in the new flow
-            getChartData: () => [],
+            getChartData: jest.fn().mockResolvedValue(pts),
+            streamRange: jest.fn().mockImplementation(async function* () {
+              for (const p of pts) {
+                // ensure async iterator behaviour
+                yield await Promise.resolve(p);
+              }
+            }),
           },
-        },
-        {
-          provide: DataGeneratorService,
-          useValue: dataGeneratorMock,
         },
       ],
     }).compile();
@@ -59,10 +54,10 @@ describe('ProfitService', () => {
 
   describe('roundToCents()', () => {
     const cases: Array<[number, number]> = [
-      [2.344,   2.34],
-      [2.345,   2.35],
-      [3.3333,  3.33],
-      [5.6789,  5.68],
+      [2.344, 2.34],
+      [2.345, 2.35],
+      [3.3333, 3.33],
+      [5.6789, 5.68],
       [123.456, 123.46],
     ];
 

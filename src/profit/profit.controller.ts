@@ -42,9 +42,8 @@ export class ProfitController {
 
   @Get('stats-ready')
   isStatsReady(): { ready: boolean } {
-  return { ready: this.pricesService.isStatsReady() };
-}
-
+    return { ready: this.pricesService.isStatsReady() };
+  }
 
   @Get('minmax')
   async getMinMax(): Promise<{ min: string; max: string }> {
@@ -52,7 +51,10 @@ export class ProfitController {
       // Fast path: read only first and last entries from the data file
       const quick = await this.pricesService.getMinMaxQuick();
       return { min: quick.start, max: quick.end };
-    } catch (error) {
+    } catch (err) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.error(err);
+      }
       throw new HttpException(
         'Failed to retrieve time range',
         HttpStatus.INTERNAL_SERVER_ERROR,
