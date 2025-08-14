@@ -1,7 +1,7 @@
 # Stock Profit Calculator
 
 ## Live Demo
-**Azure Website:** https://stock-profit-app-a3abcnb0erhdgyev.westeurope-01.azurewebsites.net/
+**Azure Website:** [https://stock-profit-app-a3abcnb0erhdgyev.westeurope-01.azurewebsites.net/](https://stock-profit-app-a3abcnb0erhdgyev.westeurope-01.azurewebsites.net/)
 
 ## Project Overview
 
@@ -10,8 +10,9 @@ A web application that calculates the optimal buy/sell strategy for a given stoc
 The application includes:
 - Backend API built with NestJS and TypeScript
 - Frontend built with Vue.js and Highcharts
-- Script to generate mock data 
-- Deployment on Azure App Service and CI/CD with GitHub Actions
+- Script to generate mock data
+- Conainerized solution 
+- Deployment on Azure App Service 
 
 ## Features
 
@@ -25,7 +26,7 @@ The application includes:
 The application uses a script to generate simulated stock price data:
 - **Time Range**: 3-month window (2025-01-01 to 2025-04-01)
 - **Data Format**: NDJSON stream (`3mo-prices.ndjson`), suitable for large datasets
-- **Data Volume**: Large (potentially multi-million points depending on granularity)
+- **Data Volume**: ~ 7,800,000 data points
 - **Price Range**: Realistic fluctuations with a random walk algorithm
 
 # Security
@@ -43,7 +44,34 @@ The application uses a script to generate simulated stock price data:
 
 ## Development Setup
 
-If you want to run this locally:
+## Run with Docker
+
+### Option 1: Prebuilt image
+
+```bash
+docker run -d \
+  --name stock-profit-app \
+  -p 3000:3000 \
+  -e NODE_ENV=production \
+  rayabakarska/stock-profit-app:latest
+```
+
+Image is published on Docker Hub: [rayabakarska/stock-profit-app](https://hub.docker.com/r/rayabakarska/stock-profit-app)
+
+Note: Ensure you publish to port 3000 on the host (e.g., `-p 3000:3000`).
+
+### Option 2: Docker Compose (local build)
+
+```bash
+# From the project root
+docker compose up --build -d
+```
+
+- App will be available at `http://localhost:3000`
+- Health check: `http://localhost:3000/health`
+- The compose file maps port 3000 and can mount a local data file into `dist/data/3mo-prices.ndjson`.
+
+## If you want to run this locally:
 
 ```bash
 # Clone the repository
@@ -53,9 +81,6 @@ cd stock-profit-app
 # Install dependencies
 npm install
 cd stock-profit-frontend && npm install && cd ..
-
-# Optional: set environment variables for the backend
-echo API_KEY=your-own-key > .env
 
 # Run the app
 npm run build
@@ -81,47 +106,6 @@ The generated file will be placed under `dist/data/3mo-prices.ndjson` and used b
 
 - `API_KEY`: Optional. When set, cross-origin clients must include `X-API-Key`. Same-origin browser requests never require it.
 - `FRONTEND_URL`: Optional in production. When set, only this origin is allowed via CORS. If unset, cross-origin is blocked.
-- `PRICES_FILE`: Optional path to an NDJSON (preferred) or JSON array file with price points. Defaults to `dist/data/3mo-prices.ndjson`, with fallbacks under `data/` and `src/data/` and to `24h-prices.json` if present.
-
-## Run with Docker
-
-### Option 1: Docker Compose (local build)
-
-```bash
-# From the project root
-docker compose up --build -d
-```
-
-- App will be available at `http://localhost:3000`
-- Health check: `http://localhost:3000/health`
-- The compose file maps port 3000 and can mount a local data file into `dist/data/3mo-prices.ndjson`.
-
-### Option 2: Prebuilt image
-
-```bash
-docker run -d \
-  --name stock-profit-app \
-  -p 3000:3000 \
-  -e NODE_ENV=production \
-  rayabakarska/stock-profit-app:latest
-```
-
-Image is published on Docker Hub: [rayabakarska/stock-profit-app](https://hub.docker.com/r/rayabakarska/stock-profit-app)
-
-Optional flags:
-
-```bash
-# Allow only a specific frontend origin (recommended in production)
--e FRONTEND_URL=http://localhost:3000
-
-# Protect cross-origin API calls with a simple API key
--e API_KEY=your-own-key
-
-# Use an external price file (NDJSON). Adjust the path for your OS/shell.
--v ${PWD}/src/data/3mo-prices.ndjson:/app/dist/data/3mo-prices.ndjson:ro
-```
-
-Note: Ensure you publish to port 3000 on the host (e.g., `-p 3000:3000`).
 
 ## API Documentation
 
