@@ -28,8 +28,12 @@ const FRONTEND_DIST = join(__dirname, '..', 'stock-profit-frontend', 'dist');
     }),
     ThrottlerModule.forRoot([
       {
-        ttl: 60000,
-        limit: 10,
+        ttl: 60000, // 1 minute window
+        limit: 30, // Increased from 10 to 30 requests per minute
+      },
+      {
+        ttl: 1000, // 1 second window for burst protection
+        limit: 10, // Allow up to 10 requests per second
       },
     ]),
     PricesModule,

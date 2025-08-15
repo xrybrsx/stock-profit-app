@@ -4,6 +4,10 @@ import { ValidationPipe, BadRequestException } from '@nestjs/common';
 import type { Request, Response, NextFunction, Express } from 'express';
 
 async function bootstrap() {
+  // Optimize Node.js for concurrent requests
+  process.setMaxListeners(0); // Allow more event listeners
+  process.env.UV_THREADPOOL_SIZE = '8'; // Increase thread pool for I/O operations
+  
   const app = await NestFactory.create(AppModule);
 
   // Configure CORS based on environment
