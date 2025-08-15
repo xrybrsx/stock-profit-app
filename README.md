@@ -49,18 +49,19 @@ The application uses a script to generate simulated stock price data:
 ### Option 1: Prebuilt image
 
 ```bash
-docker run -d \
-  --name stock-profit-app \
-  -p 3000:3000 \
-  -e NODE_ENV=production \
-  rayabakarska/stock-profit-app:latest
+# Pull the image 
+docker pull rayabakarska/stock-profit-app:latest
+# Run container
+docker run -d --name stock-profit-app -p 3000:3000 -e NODE_ENV=production rayabakarska/stock-profit-app:latest
 ```
 
 Image is published on Docker Hub: [rayabakarska/stock-profit-app](https://hub.docker.com/r/rayabakarska/stock-profit-app)
 
-Note: Ensure you publish to port 3000 on the host (e.g., `-p 3000:3000`).
+Note: Ensure you publish to port 3000.
 
 ### Option 2: Docker Compose (local build)
+
+Follow the 'Generate local data (3-month NDJSON)' instructions
 
 ```bash
 # From the project root
@@ -82,6 +83,7 @@ cd stock-profit-app
 npm install
 cd stock-profit-frontend && npm install && cd ..
 
+# Generate data before building
 # Run the app
 npm run build
 npm start
