@@ -61,7 +61,7 @@ Note: Ensure you publish to port 3000.
 
 ### Option 2: Docker Compose (local build)
 
-Follow the 'Generate local data (3-month NDJSON)' instructions
+Note: Make sure to follow the 'Generate local data (3-month NDJSON)' instructions before building the container
 
 ```bash
 # From the project root
