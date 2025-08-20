@@ -1,21 +1,11 @@
 // src/prices/prices.service.ts
-/**
- * PricesService: 
- * - Streams NDJSON to keep memory low
- * - Builds a small sparse index (timestamp -> file offset) to seek quickly
- * - Downsamples for charts to keep responses small and UIs snappy
- * - Caches frequent queries and preloads summary stats on startup
- */
 import { Injectable } from '@nestjs/common';
 import * as fs from 'fs';
 import { promises as fsp } from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
 
-/**
- *small Least-Recently-Used cache
- * so caching recent results avoids re-reading and re-processing the file.
- */
+// Very small LRU cache for memoizing chart data responses
 class SimpleLruCache<K, V> {
   private map: Map<K, V> = new Map();
   constructor(private readonly maxEntries: number) {}
@@ -45,16 +35,12 @@ export interface PricePoint {
 }
 
 @Injectable()
-
 export class PricesService {
-  /** Default path used if no other candidate file exists (prod-friendly). */
   private readonly filePath = path.resolve(
     process.cwd(),
     'dist/data/3mo-prices.ndjson',
   );
-  /** Max points returned by chart queries to keep payloads/UI fast. */
   private readonly MAX_CHART_POINTS = 1000;
-  /** Stream chunk size: balance syscall overhead with first-byte latency. */
   private readonly FILE_STREAM_CHUNK_BYTES = 1 << 20; // 1MB chunks for faster reads
 
   // Cache a few recent chartData results by [start|end|maxPoints]
@@ -65,7 +51,6 @@ export class PricesService {
   private readonly INDEX_EVERY_N_LINES = 1000; // adjust for size/perf
 
   async onModuleInit() {
-    // Precompute stats soon after startup so first request is snappy.
     this.warmUpStats(); // don't await — run in background
   }
 
@@ -79,7 +64,6 @@ export class PricesService {
   private dateRangeQuickCache: { start: string; end: string } | null = null;
 
   // Resolve data file path across environments (env override, local data/, dist/data/, src/data/)
-
   private getDataFilePath(): string {
     const candidates = [
       process.env.PRICES_FILE
@@ -101,10 +85,6 @@ export class PricesService {
     return this.filePath;
   }
 
-  /**
-   * Detects whether a file starts with a JSON array '[' (array mode)
-   * instead of newline-delimited JSON (NDJSON).
-  */
   private async isJsonArrayFile(filePath: string): Promise<boolean> {
     try {
       const fh = await fsp.open(filePath, 'r');
@@ -122,10 +102,6 @@ export class PricesService {
     }
   }
 
-  /**
-   * Reads the timestamp of the first data point only.
-   * NDJSON: stream until the first newline, then parse.
-   */
   private async readFirstLineTimestamp(): Promise<string | null> {
     const filePath = this.getDataFilePath();
     if (await this.isJsonArrayFile(filePath)) {
@@ -173,10 +149,6 @@ export class PricesService {
     });
   }
 
-  /**
-   * Reads the timestamp of the last data point only.
-   * NDJSON: seek near the end and scan backward to find a full line.
-   */
   private async readLastLineTimestamp(): Promise<string | null> {
     const filePath = this.getDataFilePath();
     if (await this.isJsonArrayFile(filePath)) {
@@ -256,11 +228,6 @@ export class PricesService {
     }
   }
 
-  /**
-   * Streams points from the selected data file.
-   * NDJSON mode yields one JSON object per line without loading the whole file.
-   * JSON-array mode reads into memory (small data).
-   */
   private async *streamPoints(): AsyncGenerator<PricePoint> {
     const filePath = this.getDataFilePath();
     if (await this.isJsonArrayFile(filePath)) {
@@ -289,10 +256,6 @@ export class PricesService {
     }
   }
 
-  /**
-   * Builds a sparse index mapping timestamps -> byte offsets in the NDJSON file.
-   * Sampling every N lines keeps the index tiny while enabling quick seeks.
-   */
   private async buildLineIndex(): Promise<void> {
     if (this.lineIndex) return;
     const filePath = this.getDataFilePath();
@@ -355,10 +318,6 @@ export class PricesService {
     }
   }
 
-  /**
-   * Binary-search the sparse index to find the largest offset whose timestamp
-   * is <= the requested time. Returns 0 if index is missing/invalid.
-   */
   private findOffsetForTimestamp(targetIso: string): number {
     const target = Date.parse(targetIso);
     if (!this.lineIndex || this.lineIndex.length === 0 || isNaN(target))
@@ -379,11 +338,6 @@ export class PricesService {
     return best;
   }
 
-  /**
-   * Streams points starting at a given byte offset. If the offset lands
-   * mid-line, the first JSON.parse will fail; we skip that partial line
-   * and continue cleanly.
-   */
   private async *streamPointsFromOffset(
     offset: number,
   ): AsyncGenerator<PricePoint> {
@@ -407,7 +361,6 @@ export class PricesService {
     }
   }
 
-  /** Earliest timestamp by reading the first point encountered. */
   async getMinTimestamp(): Promise<string> {
     for await (const point of this.streamPoints()) {
       return point.timestamp; // first point
@@ -415,7 +368,6 @@ export class PricesService {
     throw new Error('No data found');
   }
 
-  /** Latest timestamp by retaining the last point seen during a stream. */
   async getMaxTimestamp(): Promise<string> {
     let last: PricePoint | null = null;
     for await (const point of this.streamPoints()) {
@@ -425,11 +377,6 @@ export class PricesService {
     return last.timestamp;
   }
 
-  /**
-   * Downsamples points in [start, end] for charting.
-   * divide the span into up to MAX_CHART_POINTS buckets and keep
-   * the first point observed in each bucket (fast, bounded payload size).
-   */
   async getChartData(start: string, end: string): Promise<PricePoint[]> {
     // Cache key based on requested range and resolution
     const cacheKey = `${start}|${end}|${this.MAX_CHART_POINTS}`;
@@ -467,11 +414,6 @@ export class PricesService {
     return result;
   }
 
-  /**
-   * Streams all points within [start, end].
-   * Uses the sparse index to seek near the start to avoid scanning the whole file.
-   * Falls back to scanning from the beginning if needed for robustness.
-   */
   async *streamRange(start: string, end: string): AsyncGenerator<PricePoint> {
     const startMs = Date.parse(start);
     const endMs = Date.parse(end);
@@ -535,12 +477,10 @@ export class PricesService {
     };
   }
 
-  /** Whether the preloaded stats cache has been populated. */
   public isStatsReady(): boolean {
     return this.statsCache !== null;
   }
 
-  /** Returns preloaded stats or throws if they are not ready yet. */
   public getStats(): {
     totalPoints: number;
     dateRange: { start: string; end: string };
