@@ -111,13 +111,16 @@ export class ProfitService {
     const bucketFirst: Map<number, PricePoint> = new Map();
 
     if (!bestBuySell) {
+      // Use small epsilon for floating-point comparison
+      const EPS = 1e-9;
+      
       for await (const pt of this.pricesService.streamRange(sT, eT)) {
         // Chart bucket sampling: keep first point in each time bucket
         const ts = Date.parse(pt.timestamp);
         const bucketIndex = Math.floor((ts - startMs) / bucketMs);
         if (!bucketFirst.has(bucketIndex)) bucketFirst.set(bucketIndex, pt);
 
-        if (!minPoint || pt.price < minPoint.price) {
+        if (!minPoint || pt.price < minPoint.price - EPS) {
           minPoint = pt;
           continue;
         }
@@ -125,9 +128,26 @@ export class ProfitService {
         const shares = F / minPoint.price;
         const profit = (pt.price - minPoint.price) * shares;
 
-        if (profit > bestProfit) {
+        // Handle ties: choose earliest and shortest interval when profits are equal
+        if (profit > bestProfit + EPS) {
           bestProfit = profit;
           bestBuySell = { buy: minPoint, sell: pt };
+        } else if (Math.abs(profit - bestProfit) <= EPS) {
+          if (!bestBuySell) {
+            // First profitable pair found
+            bestProfit = profit;
+            bestBuySell = { buy: minPoint, sell: pt };
+          } else {
+            // Calculate durations for tie-breaking
+            const currentDuration = Date.parse(pt.timestamp) - Date.parse(minPoint.timestamp);
+            const bestDuration = Date.parse(bestBuySell.sell.timestamp) - Date.parse(bestBuySell.buy.timestamp);
+            
+            // Choose the shortest interval, and if durations are equal, choose the earliest one
+            if (currentDuration < bestDuration || 
+                (currentDuration === bestDuration && Date.parse(minPoint.timestamp) < Date.parse(bestBuySell.buy.timestamp))) {
+              bestBuySell = { buy: minPoint, sell: pt };
+            }
+          }
         }
         pointsScanned++;
       }

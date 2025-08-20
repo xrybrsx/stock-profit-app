@@ -52,6 +52,49 @@ describe('ProfitService', () => {
     expect(result.netProfit).toBe(200);
   });
 
+  it('should choose earliest and shortest interval when profits are equal', async () => {
+    // Mock a scenario with equal profits but different durations
+    // We need to create a scenario where the algorithm can find multiple pairs with equal profits
+    const equalProfitPts: PricePoint[] = [
+      { timestamp: '2024-01-01T09:00:00Z', price: 100 }, // buy at 9:00
+      { timestamp: '2024-01-01T09:30:00Z', price: 120 }, // sell at 9:30 (30 min, profit=200)
+      { timestamp: '2024-01-01T10:00:00Z', price: 100 }, // buy at 10:00 (same price)
+      { timestamp: '2024-01-01T11:00:00Z', price: 120 }, // sell at 11:00 (1 hour, profit=200)
+      { timestamp: '2024-01-01T12:00:00Z', price: 100 }, // buy at 12:00 (same price)
+      { timestamp: '2024-01-01T13:00:00Z', price: 120 }, // sell at 13:00 (1 hour, profit=200)
+    ];
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        ProfitService,
+        {
+          provide: PricesService,
+          useValue: {
+            getChartData: jest.fn().mockResolvedValue(equalProfitPts),
+            streamRange: jest.fn().mockImplementation(async function* () {
+              for (const p of equalProfitPts) {
+                yield await Promise.resolve(p);
+              }
+            }),
+          },
+        },
+      ],
+    }).compile();
+
+    const equalProfitService = module.get<ProfitService>(ProfitService);
+    
+    const result = await equalProfitService.calculateProfit(
+      '2024-01-01T09:00:00Z',
+      '2024-01-01T14:00:00Z',
+      1000,
+    );
+
+    // Should choose the 30-minute interval (9:00 to 9:30) as it's shortest among equal profits
+    expect(result.buyTime).toBe('2024-01-01T09:00:00Z');
+    expect(result.sellTime).toBe('2024-01-01T09:30:00Z');
+    expect(result.netProfit).toBe(200);
+  });
+
   describe('roundToCents()', () => {
     const cases: Array<[number, number]> = [
       [2.344, 2.34],
