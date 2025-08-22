@@ -63,15 +63,21 @@ export class ProfitService {
     }
   }
 
-  private validateDateRange(startTime: string, endTime: string): void {
+   private async validateDateRange(startTime: string, endTime: string): Promise<void> {
     const start = new Date(startTime);
     const end = new Date(endTime);
+    const stats = await this.pricesService.getMinMaxQuick();
+    const min = new Date(stats.start);
+    const max = new Date(stats.end);
     if (isNaN(start.getTime()) || isNaN(end.getTime()) || start >= end) {
       throw new BadRequestException('Invalid or reversed date range');
     }
     const diffDays = (end.getTime() - start.getTime()) / 86_400_000;
     if (diffDays > 90) {
       throw new BadRequestException('Date range cannot exceed 90 days');
+    }
+    if (start < min || end > max) {
+      throw new BadRequestException('Date range not in the available range');
     }
   }
 
@@ -93,7 +99,7 @@ export class ProfitService {
     const eT = this.sanitizeInput(endTime);
     const F = Number(this.sanitizeInput(funds));
     this.validateFunds(F);
-    this.validateDateRange(sT, eT);
+    await this.validateDateRange(sT, eT);
 
     // ✅ Stream points to find best buy/sell (single pass) and build chart data buckets
     const cacheKey = `${sT}|${eT}`;
@@ -167,10 +173,10 @@ export class ProfitService {
         .toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
     );
 
-    // ✅ Get full-range chart data (own streaming + cache handles performance)
+    // Get full-range chart data (own streaming + cache handles performance)
     const chartData = await this.pricesService.getChartData(sT, eT);
 
-    // ✅ Snap marker prices to chart for alignment
+    // Snap marker prices to chart for alignment
     function snapToNearest(ts: string): PricePoint | undefined {
       return chartData.reduce(
         (nearest, p) => {
