@@ -2,6 +2,9 @@
 
 ## Live Demo
 **Azure Website:** [https://stock-profit-app-a3abcnb0erhdgyev.westeurope-01.azurewebsites.net/](https://stock-profit-app-a3abcnb0erhdgyev.westeurope-01.azurewebsites.net/)
+
+<img width="1108" height="649" alt="image" src="https://github.com/user-attachments/assets/fe43e317-2087-4feb-9532-31cc18703dcd" />
+
 ## Project Overview
 
 A web application that calculates the optimal buy/sell strategy for a given stock price dataset. 
